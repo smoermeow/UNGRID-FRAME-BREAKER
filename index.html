@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UnGrid // Frame Breaker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --color-bg: #000000;
+        --color-primary: #FFD43B; /* Yellow */
+        --color-accent: #5CFF72;  /* Green */
+        --color-text: #E0E083;    /* Faded Yellow-Green */
+        --color-border: #2B2B2B;
+      }
+
+      body { 
+        font-family: 'JetBrains Mono', monospace; 
+        background-color: var(--color-bg); 
+        color: var(--color-text);
+        overflow-x: hidden;
+      }
+
+      /* Subtle Text Glow */
+      .glow-text-green { text-shadow: 0 0 4px rgba(92, 255, 114, 0.5); }
+      .glow-text-yellow { text-shadow: 0 0 4px rgba(255, 212, 59, 0.5); }
+
+      /* Custom scrollbar */
+      ::-webkit-scrollbar { width: 12px; }
+      ::-webkit-scrollbar-track { background: #111; border-left: 1px solid #333; }
+      ::-webkit-scrollbar-thumb { background: #FFD43B; border: 2px solid #111; }
+      ::-webkit-scrollbar-thumb:hover { background: #E0E083; }
+
+      /* Utilities */
+      .border-crt { border: 1px solid var(--color-border); }
+      .bg-crt-dark { background-color: #0a0a0a; }
+      
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+      .cursor-blink { animation: blink 1s step-end infinite; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.32.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.559.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "jszip": "https://esm.sh/jszip@3.10.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
