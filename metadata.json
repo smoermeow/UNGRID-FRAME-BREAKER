@@ -1,5 +1,5 @@
 {
   "name": "UnGrid",
-  "description": "Upload a 16:9 grid composition and automatically extract, upscale, and re-imagine individual panels in 2K resolution using Canvas and Gemini AI.",
+  "description": "Upload a 16:9, 9:16, or 1:1 grid composition and automatically extract, upscale, and re-imagine individual panels in 2K resolution using Canvas and Gemini AI.",
   "requestFramePermissions": []
 }

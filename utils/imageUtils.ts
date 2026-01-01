@@ -35,6 +35,12 @@ export const getTargetDimensions = (resolution: Resolution, ratio: AspectRatio) 
       case '2K': return { width: 2560, height: 1440 };
       case '4K': return { width: 3840, height: 2160 };
     }
+  } else if (ratio === '9:16') {
+    switch (resolution) {
+      case '1K': return { width: 1080, height: 1920 };
+      case '2K': return { width: 1440, height: 2560 };
+      case '4K': return { width: 2160, height: 3840 };
+    }
   } else {
     // 1:1
     switch (resolution) {

@@ -66,7 +66,7 @@ If you are forking or contributing to this repository:
 
 ## 🎮 How to Use
 
-1.  **Upload:** Drag and drop a grid image (16:9 or 1:1 aspect ratio).
+1.  **Upload:** Drag and drop a grid image (16:9, 9:16, or 1:1 aspect ratio).
 2.  **Configure:**
     *   **Layout:** Choose 3x3, 2x2, or Auto-Detect (Powered by Flash 2.5).
     *   **Mode:**

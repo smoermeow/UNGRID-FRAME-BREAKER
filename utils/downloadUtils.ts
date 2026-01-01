@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { ExtractedPanel, Resolution } from '../types';
+import { ExtractedPanel, Resolution, FaceTarget, ChainStep } from '../types';
 
 export const downloadPanelsAsZip = async (
   panels: ExtractedPanel[], 
@@ -43,4 +43,79 @@ export const downloadPanelsAsZip = async (
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+};
+
+export const downloadFaceTargetsAsZip = async (
+  targets: FaceTarget[],
+  resolution: Resolution
+) => {
+  const zip = new JSZip();
+  const folderName = `ungrid-detailfix-${resolution}`;
+  const folder = zip.folder(folderName);
+  
+  if (!folder) return;
+  let hasContent = false;
+
+  targets.forEach((target, index) => {
+    if (target.result) {
+      hasContent = true;
+      const base64Data = target.result.split(',')[1];
+      const typeLabel = target.fixType === 'face' ? 'face' : 'line';
+      folder.file(`${typeLabel}-fix-${index + 1}.png`, base64Data, { base64: true });
+    }
+  });
+
+  if (!hasContent) {
+    alert("No processed images to download.");
+    return;
+  }
+
+  const content = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(content);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${folderName}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+export const downloadChainHistoryAsZip = async (
+    steps: ChainStep[],
+    resolution: Resolution
+) => {
+    const zip = new JSZip();
+    const folderName = `ungrid-chain-clean-${resolution}`;
+    const folder = zip.folder(folderName);
+
+    if (!folder) return;
+    let hasContent = false;
+
+    steps.forEach((step, index) => {
+        if (step.resultUrl) {
+            hasContent = true;
+            const base64Data = step.resultUrl.split(',')[1];
+            // Sanitize filename from instruction
+            const safeName = step.instruction.replace(/[^a-z0-9]/gi, '_').substring(0, 20);
+            folder.file(`step-${index + 1}-${safeName}.png`, base64Data, { base64: true });
+        }
+    });
+
+    if (!hasContent) {
+        alert("No completed steps to download.");
+        return;
+    }
+
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${folderName}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 };

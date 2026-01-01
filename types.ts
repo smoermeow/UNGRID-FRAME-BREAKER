@@ -1,3 +1,4 @@
+
 export interface ExtractedPanel {
   id: string;
   index: number; // 0-8
@@ -7,10 +8,29 @@ export interface ExtractedPanel {
   status: 'idle' | 'analyzing' | 'generating' | 'error' | 'success';
 }
 
+export type FixType = 'face' | 'line';
+
+export interface FaceTarget {
+  id: string;
+  targetUrl: string;    // The cropped face or body
+  referenceUrl: string; // The reference for this specific character
+  fixType: FixType;     // The mode selected for this job
+  position: string;
+  status: 'idle' | 'processing' | 'success' | 'error';
+  result: string | null;
+}
+
+export interface ChainStep {
+  id: string;
+  instruction: string; // e.g. "Denoise", "Fix Eyes"
+  status: 'pending' | 'processing' | 'completed' | 'error' | 'skipped';
+  resultUrl?: string; // The image resulting from this specific step
+}
+
 export type Resolution = '1K' | '2K' | '4K';
-export type AspectRatio = '16:9' | '1:1';
+export type AspectRatio = '16:9' | '1:1' | '9:16';
 export type ProcessingMode = 'fidelity' | 'creative';
-export type GridLayout = '3x3' | '2x2' | 'irregular';
+export type GridLayout = '3x3' | '2x2' | '1x3' | 'irregular';
 
 export interface BoundingBox {
   ymin: number;
