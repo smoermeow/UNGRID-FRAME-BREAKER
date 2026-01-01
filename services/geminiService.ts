@@ -1,24 +1,25 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Resolution, AspectRatio, ProcessingMode, BoundingBox, FixType } from '../types';
 
+const KEY_STORAGE_NAME = 'ungrid_user_api_key';
+
+export const getStoredApiKey = () => localStorage.getItem(KEY_STORAGE_NAME);
+export const setStoredApiKey = (key: string) => localStorage.setItem(KEY_STORAGE_NAME, key);
+export const clearStoredApiKey = () => localStorage.removeItem(KEY_STORAGE_NAME);
+
 export const hasValidKey = () => {
-  return !!process.env.API_KEY;
+  return !!getStoredApiKey() || !!process.env.API_KEY;
 };
 
 const getClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Prioritize manually entered local keys to ensure BYOK behavior
+  const apiKey = getStoredApiKey() || process.env.API_KEY;
   if (!apiKey) throw new Error("MISSING_API_KEY");
-  // Always create a fresh instance to ensure we use the most up-to-date key from the environment
   return new GoogleGenAI({ apiKey });
 };
 
 export const detectPanels = async (base64Image: string): Promise<BoundingBox[]> => {
-  if (base64Image.startsWith('blob:')) {
-    throw new Error("Invalid Format: detectPanels received a blob URL. It requires a Base64 Data URL.");
-  }
-
   const data = base64Image.split(',')[1] || base64Image;
-
   try {
     const ai = getClient();
     const response = await ai.models.generateContent({
@@ -51,7 +52,6 @@ export const detectPanels = async (base64Image: string): Promise<BoundingBox[]> 
         },
       }
     });
-
     let text = response.text || '{}';
     text = text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
     const json = JSON.parse(text);
@@ -62,98 +62,29 @@ export const detectPanels = async (base64Image: string): Promise<BoundingBox[]> 
   }
 };
 
-export const describeImage = async (base64Image: string): Promise<string> => {
-  const data = base64Image.split(',')[1] || base64Image;
-  
-  try {
-    const ai = getClient();
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'image/png',
-              data: data
-            }
-          },
-          {
-            text: "Provide a concise, detailed visual description of this image panel. Focus on the main subject and style."
-          }
-        ]
-      }
-    });
-    return response.text || "No description generated.";
-  } catch (error) {
-    console.error("Gemini Describe Error:", error);
-    throw error;
-  }
-};
-
 export const reimagineImage = async (
   base64Image: string, 
   resolution: Resolution, 
   aspectRatio: AspectRatio, 
   mode: ProcessingMode
 ): Promise<string> => {
-  
-  const generate = async () => {
-    const data = base64Image.split(',')[1] || base64Image;
+  const data = base64Image.split(',')[1] || base64Image;
+  let prompt = mode === 'fidelity' 
+    ? `Create a high-fidelity copy of this image. Preserve original colors and lighting. Resolution: ${resolution}.`
+    : `Create a high-fidelity version. Maintain composition but enhance details and lighting. Resolution: ${resolution}.`;
 
-    let prompt = "";
-    if (mode === 'fidelity') {
-        prompt = `Create a high-fidelity copy of this image. 
-        Strictly preserve the original colors, lighting, exposure, and artistic style. 
-        Do not add new details, do not change the texture, and do not "improve" the image. 
-        The goal is a faithful, sharp reproduction of the input image at ${resolution} resolution.`;
-    } else {
-        prompt = `Create a high-fidelity version of this image. 
-        Maintain the exact composition and pose, but enhance details, lighting, and texture to professional studio quality. 
-        Optimize color grading for a premium look at ${resolution} resolution.`;
-    }
-
+  try {
     const ai = getClient();
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: 'image/png',
-                data: data
-              }
-            },
-            {
-              text: prompt
-            }
-          ]
-        }
-      ],
-      config: {
-        imageConfig: {
-          imageSize: resolution,
-          aspectRatio: aspectRatio
-        }
-      }
+      contents: [{ parts: [{ inlineData: { mimeType: 'image/png', data } }, { text: prompt }] }],
+      config: { imageConfig: { imageSize: resolution, aspectRatio: aspectRatio } }
     });
 
-    let refusalText = "";
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-      if (part.text) {
-        refusalText += part.text;
-      }
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    
-    const errorMsg = refusalText ? `Model Refusal: ${refusalText.substring(0, 200)}` : "No image generated by Gemini.";
-    throw new Error(errorMsg);
-  };
-
-  try {
-    return await generate();
+    throw new Error("No image generated by Gemini.");
   } catch (error: any) {
     console.error("Gemini Re-imagine Error:", error);
     throw error;
@@ -167,78 +98,24 @@ export const fixDetail = async (
   fixType: FixType,
   positionContext: string = ""
 ): Promise<string> => {
+  const targetData = targetBase64.split(',')[1] || targetBase64;
+  const referenceData = referenceBase64.split(',')[1] || referenceBase64;
+  const positionClause = positionContext.trim() ? ` (Context: ${positionContext.trim()})` : "";
   
-  const generate = async () => {
-    const targetData = targetBase64.split(',')[1] || targetBase64;
-    const referenceData = referenceBase64.split(',')[1] || referenceBase64;
+  const prompt = `Image 1 (Target) and Image 2 (Reference) are the same character. Restore Image 1 to high quality using Image 2 features. Maintain pose exactly${positionClause}. Mode: ${fixType}.`;
 
-    const positionClause = positionContext.trim() ? ` (Context: ${positionContext.trim()})` : "";
-    let prompt = "";
-
-    if (fixType === 'face') {
-        prompt = `Image 1 (Target) and Image 2 (Reference) depict the **EXACT SAME CHARACTER**.
-    
-        TASK: Restore Image 1 to high quality.
-        
-        STRICT RULES:
-        1. **GEOMETRY & POSE**: You MUST strictly respect the head angle, eye gaze direction, pupil placement, and facial expression of Image 1${positionClause}. Do not change the pose.
-        2. **FEATURE SOURCE**: You MUST use the facial features (Eye shape, Pupil design, Iris texture, Nose shape, Mouth) from Image 2.
-        3. **REPAIR LOGIC**: If Image 1 has blurry or corrupted eyes, **DO NOT HALLUCINATE NEW ONES**. Look at Image 2 to see exactly how the eyes are drawn (e.g. shape, iris style, lashes), then paint those **EXACT** eyes onto Image 1, strictly adjusted for Image 1's perspective and gaze.
-        4. **NO HALLUCINATION**: Do not create features that do not exist in Image 2.
-        5. **BACKGROUND**: The output MUST have a uniform solid background (e.g. greenscreen) matching the exact color of Image 1. Do not add background details.
-        
-        The result should look like Image 1 was re-captured with the camera quality and feature clarity of Image 2.`;
-
-    } else {
-        prompt = `Image 1 (Target) and Image 2 (Reference) depict the **EXACT SAME CHARACTER**.
-    
-        TASK: Restore Image 1 to high quality.
-        
-        STRICT RULES:
-        1. **GEOMETRY & POSE**: You MUST strictly respect the full body pose, silhouette, limb positioning, and camera angle of Image 1${positionClause}. Do not change the pose.
-        2. **FEATURE SOURCE**: You MUST use the character design details (Costume, Clothing texture, Linework style, Colors, Accessories) from Image 2.
-        3. **REPAIR LOGIC**: If Image 1 has blurry linework or corrupted details, **DO NOT HALLUCINATE NEW DESIGNS**. Look at Image 2 to see exactly how the lines and details are drawn, then paint those **EXACT** details onto Image 1, strictly mapped to Image 1's pose.
-        4. **NO HALLUCINATION**: Do not create costume elements that do not exist in Image 2.
-        5. **BACKGROUND**: The output MUST have a uniform solid background (e.g. greenscreen) matching the exact color of Image 1. Do not add background details.
-        
-        The result should look like Image 1 was re-captured with the camera quality and feature clarity of Image 2.`;
-    }
-
+  try {
     const ai = getClient();
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
-      contents: [
-        {
-          parts: [
-            { inlineData: { mimeType: 'image/png', data: targetData } }, 
-            { inlineData: { mimeType: 'image/png', data: referenceData } }, 
-            { text: prompt }
-          ]
-        }
-      ],
-      config: {
-        imageConfig: {
-          imageSize: resolution
-        }
-      }
+      contents: [{ parts: [{ inlineData: { mimeType: 'image/png', data: targetData } }, { inlineData: { mimeType: 'image/png', data: referenceData } }, { text: prompt }] }],
+      config: { imageConfig: { imageSize: resolution } }
     });
 
-    let refusalText = "";
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-      if (part.text) {
-        refusalText += part.text;
-      }
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    
-    const errorMsg = refusalText ? `Model Refusal: ${refusalText.substring(0, 200)}` : "No image generated by Gemini.";
-    throw new Error(errorMsg);
-  };
-
-  try {
-    return await generate();
+    throw new Error("No image generated by Gemini.");
   } catch (error: any) {
     console.error("Gemini Detail Fix Error:", error);
     throw error;
@@ -251,60 +128,23 @@ export const runChainCleaningStep = async (
   instruction: string,
   resolution: Resolution
 ): Promise<string> => {
-  
-  const generate = async () => {
-    const currentData = currentImageBase64.split(',')[1] || currentImageBase64;
-    const parts: any[] = [];
-    
-    parts.push({ inlineData: { mimeType: 'image/png', data: currentData } });
+  const currentData = currentImageBase64.split(',')[1] || currentImageBase64;
+  const parts: any[] = [{ inlineData: { mimeType: 'image/png', data: currentData } }];
+  if (referenceImageBase64) parts.push({ inlineData: { mimeType: 'image/png', data: referenceImageBase64.split(',')[1] } });
+  parts.push({ text: `Edit this image: ${instruction}. Maintain original composition.` });
 
-    if (referenceImageBase64) {
-       const refData = referenceImageBase64.split(',')[1] || referenceImageBase64;
-       parts.push({ inlineData: { mimeType: 'image/png', data: refData } });
-    }
-
-    let prompt = "";
-    const isEyeFix = instruction.toLowerCase().includes('fix eyes') || instruction.toLowerCase().includes('restore eyes');
-
-    if (referenceImageBase64) {
-        if (isEyeFix) {
-             prompt = "Fix the eyes in the first image using the second image as a reference. Copy the eye design, pupil shape, and iris color exactly from the second image and apply it to the first image. Maintain the original pose.";
-        } else {
-             prompt = `Edit the first image: ${instruction}. Use the second image as a style reference. Maintain the original composition.`;
-        }
-    } else {
-        prompt = `Edit this image: ${instruction}. Maintain the original composition.`;
-    }
-
-    parts.push({ text: prompt });
-
+  try {
     const ai = getClient();
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: [{ parts }],
-      config: {
-        imageConfig: {
-          imageSize: resolution
-        }
-      }
+      config: { imageConfig: { imageSize: resolution } }
     });
 
-    let refusalText = "";
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-      if (part.text) {
-        refusalText += part.text;
-      }
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-    
-    const errorMsg = refusalText ? `Model Refusal: ${refusalText.substring(0, 200)}` : "No image generated by Gemini.";
-    throw new Error(errorMsg);
-  };
-
-  try {
-    return await generate();
+    throw new Error("No image generated by Gemini.");
   } catch (error: any) {
     console.error("Gemini Chain Clean Error:", error);
     throw error;
