@@ -2,9 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import ImageDropzone from './components/ImageDropzone';
 import { loadImage, splitImage, getTargetDimensions, imageToDataURL } from './utils/imageUtils';
 import { downloadPanelsAsZip, downloadFaceTargetsAsZip, downloadChainHistoryAsZip } from './utils/downloadUtils';
-import { reimagineImage, detectPanels, setStoredApiKey, getStoredApiKey, hasValidKey, fixDetail, runChainCleaningStep } from './services/geminiService';
+import { reimagineImage, detectPanels, fixDetail, runChainCleaningStep } from './services/geminiService';
 import { ExtractedPanel, Resolution, AspectRatio, ProcessingMode, GridLayout, BoundingBox, FaceTarget, ChainStep, FixType } from './types';
-import { Download, RefreshCw, Trash2, Cpu, Image as ImageIcon, Loader2, Sparkles, Archive, X, CheckSquare, Square, ChevronRight, Zap, ExternalLink, Ban, Play, SlidersHorizontal, RefreshCcw, HelpCircle, Grid2X2, Grid3X3, Scan, FlaskConical, AlertTriangle, Key, LogIn, Columns, Ratio, Eraser, Layers, Plus, ArrowRight, Lock, Unlock, Wand2, ArrowDown, ChevronDown, ZoomIn, Eye, EyeOff, User, PenTool } from 'lucide-react';
+import { Download, RefreshCw, Trash2, Cpu, Image as ImageIcon, Loader2, Sparkles, Archive, X, CheckSquare, Square, ChevronRight, Zap, ExternalLink, Ban, Play, SlidersHorizontal, RefreshCcw, HelpCircle, Grid2X2, Grid3X3, Scan, FlaskConical, AlertTriangle, Key, LogIn, Columns, Ratio, Eraser, Layers, Plus, ArrowRight, Lock, Unlock, Wand2, ArrowDown, ChevronDown, ZoomIn, Eye, EyeOff, User, PenTool, ShieldCheck, AlertCircle } from 'lucide-react';
 
 // Inline Logo Component for Header
 const UngridLogoHeader = ({ className }: { className?: string }) => (
@@ -67,11 +67,11 @@ const FAQ_ITEMS = [
   },
   {
     question: "HOW_DO_I_LOGIN_OR_USE_A_KEY?",
-    answer: "UnGrid is a 'Bring Your Own Key' application. You have two options:\n1. **Google Quick Connect:** Uses your Google account to authorize the app securely without copying keys.\n2. **Manual Key:** If you have a specific API key string, you can paste it manually. It is stored locally in your browser."
+    answer: "UnGrid uses Gemini 3 Pro, which requires a personal paid API key. You must select your own key via the official selection dialog. This ensures you only use your own credits."
   },
   {
     question: "IS_IT_FREE_TO_USE?",
-    answer: "The interface is free, but you need a Gemini API Key (paid or free tier) from Google AI Studio. We provide links to get one in the API menu."
+    answer: "The interface is free, but you need a Gemini API Key from a paid GCP project. We provide a link to the billing documentation in the authentication setup."
   }
 ];
 
@@ -124,7 +124,6 @@ const Lightbox: React.FC<LightboxProps> = ({ data, onClose }) => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
       if (e.code === 'Space') {
-          // Prevent scrolling, but be careful with buttons
           e.preventDefault(); 
           if(data.originalUrl) setShowOriginal(true);
       }
@@ -206,102 +205,61 @@ const Lightbox: React.FC<LightboxProps> = ({ data, onClose }) => {
   );
 };
 
-const ApiKeyModal = ({ 
-  isOpen, 
-  onClose 
+const AuthOverlay = ({ 
+  onAuthorize 
 }: { 
-  isOpen: boolean; 
-  onClose: () => void 
+  onAuthorize: () => void 
 }) => {
-  const [key, setKey] = useState('');
-  
-  useEffect(() => {
-    if (isOpen) {
-      setKey(getStoredApiKey() || '');
-    }
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleSave = () => {
-    if (key.trim().length > 0) {
-      setStoredApiKey(key.trim());
-      onClose();
-    }
-  };
-
-  const handleGoogleConnect = async () => {
-    try {
-      // Cast to any to avoid TypeScript conflicts if window.aistudio types are globally defined differently
-      const win = window as any;
-      if (win.aistudio && win.aistudio.openSelectKey) {
-        await win.aistudio.openSelectKey();
-        onClose();
-      } else {
-        alert("Google AI Studio integration is not available in this environment. Please use manual entry.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Failed to connect with Google.");
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md">
-      <div className="w-full max-w-lg bg-black border-2 border-[#FFD43B] p-8 shadow-[0_0_50px_rgba(255,212,59,0.2)]">
-        <h2 className="text-2xl font-black text-[#FFD43B] mb-2 uppercase tracking-tight flex items-center gap-2">
-           <Key className="inline" /> Authentication
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
+      <div className="w-full max-w-xl bg-black border-2 border-[#FFD43B] p-10 shadow-[0_0_100px_rgba(255,212,59,0.1)] text-center relative overflow-hidden">
+        {/* Decorative corner */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-[#FFD43B]/5 rotate-45 translate-x-16 -translate-y-16"></div>
+        
+        <div className="flex justify-center mb-6">
+           <div className="w-20 h-20 bg-[#FFD43B]/10 rounded-full flex items-center justify-center border border-[#FFD43B]/30">
+              <ShieldCheck size={40} className="text-[#FFD43B]" />
+           </div>
+        </div>
+        
+        <h2 className="text-3xl font-black text-[#FFD43B] mb-4 uppercase tracking-tighter leading-none">
+           AUTHENTICATION_REQUIRED
         </h2>
-        <p className="text-[#E0E083] text-xs font-mono mb-6 leading-relaxed">
-          UnGrid requires access to the Gemini API. Choose your preferred method.
+        
+        <p className="text-[#E0E083] text-sm font-mono mb-8 leading-relaxed">
+          UnGrid utilizes <span className="text-white font-bold">Gemini 3 Pro</span> for high-fidelity generative re-photography. 
+          To prevent unauthorized credit usage, all users <span className="text-[#5CFF72] font-bold underline">MUST</span> connect their own API key from a paid GCP project.
         </p>
 
-        {/* Option 1: Google Connect */}
-        <div className="mb-8 border-b border-[#2B2B2B] pb-8">
-           <h3 className="text-[#5CFF72] font-bold uppercase text-sm mb-3">Option 1: Quick Connect (Recommended)</h3>
-           <p className="text-[#E0E083]/60 text-[10px] mb-4">Securely authorize using your Google Account via AI Studio.</p>
-           <button 
-             onClick={handleGoogleConnect}
-             className="w-full bg-[#5CFF72] text-black font-bold py-3 hover:bg-white transition-colors uppercase text-sm flex items-center justify-center gap-2"
-           >
-             <Zap size={16} fill="black"/> Connect with Google
-           </button>
+        <div className="bg-[#111] border border-[#2B2B2B] p-4 mb-8 text-left">
+           <div className="flex items-start gap-3">
+              <AlertCircle size={18} className="text-[#FFD43B] shrink-0 mt-0.5" />
+              <div className="text-[11px] text-[#E0E083]/80 font-mono leading-relaxed">
+                 By connecting, you use your own Gemini API quota. Ensure your project is linked to a valid billing account in Google AI Studio.
+              </div>
+           </div>
         </div>
 
-        {/* Option 2: Manual */}
-        <div className="mb-6">
-          <h3 className="text-[#FFD43B] font-bold uppercase text-sm mb-3">Option 2: Manual Entry</h3>
-          <p className="text-[#E0E083]/60 text-[10px] mb-4">Paste your API Key directly. It is stored locally in your browser.</p>
-          <input 
-            type="password" 
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            placeholder="AIzaSy..."
-            className="w-full bg-[#111] border border-[#2B2B2B] text-white px-4 py-3 focus:outline-none focus:border-[#FFD43B] font-mono text-sm mb-3"
-          />
-          <button 
-            onClick={handleSave}
-            className="w-full bg-[#2B2B2B] border border-[#FFD43B] text-[#FFD43B] font-bold py-2 hover:bg-[#FFD43B] hover:text-black transition-colors uppercase text-xs"
-           >
-             Save Manual Key
-           </button>
-        </div>
+        <button 
+          onClick={onAuthorize}
+          className="w-full bg-[#FFD43B] text-black font-black py-4 hover:bg-white transition-all uppercase text-lg flex items-center justify-center gap-3 group"
+        >
+          <Zap size={20} fill="black" className="group-hover:scale-125 transition-transform" /> 
+          CONNECT PERSONAL KEY
+        </button>
 
-        <div className="flex items-center justify-between mt-6 pt-4 border-t border-[#2B2B2B]">
+        <div className="mt-8 pt-6 border-t border-[#2B2B2B] flex flex-col gap-3">
            <a 
-            href="https://aistudio.google.com/app/apikey" 
+            href="https://ai.google.dev/gemini-api/docs/billing" 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-[#E0E083] text-xs font-mono underline hover:text-white flex items-center gap-1"
+            className="text-[#E0E083] text-xs font-mono underline hover:text-[#5CFF72] flex items-center justify-center gap-2"
           >
-            Don't have a key? Get one here <ExternalLink size={10} />
+            How Billing Works <ExternalLink size={10} />
           </a>
-           <button 
-             onClick={onClose}
-             className="text-[#E0E083] hover:text-white uppercase text-xs font-bold"
-           >
-             [ Close ]
-           </button>
+           <p className="text-[9px] text-[#555] uppercase font-bold tracking-widest">
+             UNGRID SECURITY PROTOCOL v1.0
+           </p>
         </div>
       </div>
     </div>
@@ -312,6 +270,7 @@ type AppMode = 'grid_split' | 'face_fix' | 'chain_clean';
 
 const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('grid_split');
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
   // --- Grid Split State ---
   const [panels, setPanels] = useState<ExtractedPanel[]>([]);
@@ -339,7 +298,6 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isParamsOpen, setIsParamsOpen] = useState(false);
-  const [isKeyModalOpen, setIsKeyModalOpen] = useState(false);
   const [lightboxData, setLightboxData] = useState<{ url: string; originalUrl?: string; title?: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -348,38 +306,50 @@ const App: React.FC = () => {
 
   // --- Effects ---
 
-  // Auto-switch aspect ratio based on layout (Grid Split)
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Cast to any for the custom platform properties
+      const win = window as any;
+      if (win.aistudio && win.aistudio.hasSelectedApiKey) {
+        const hasKey = await win.aistudio.hasSelectedApiKey();
+        if (hasKey) setIsAuthorized(true);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleAuthorize = async () => {
+    const win = window as any;
+    if (win.aistudio && win.aistudio.openSelectKey) {
+       await win.aistudio.openSelectKey();
+       // Instructions dictate that we assume success after trigger to mitigate race conditions
+       setIsAuthorized(true);
+    } else {
+       alert("Official API Selection Dialog not available in this environment.");
+    }
+  };
+
   useEffect(() => {
     if (gridLayout === '1x3') {
       setAspectRatio('9:16');
     }
   }, [gridLayout]);
 
-  // Dynamic Loading Text
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined;
     if (isProcessing) {
-      // Check if current message is one of the generic ones (or empty).
-      // If it is NOT (e.g., "FIXING FACE 1..."), we do NOT cycle.
       const isGeneric = !statusMessage || LOADING_MESSAGES.includes(statusMessage);
-
-      if (!isGeneric) {
-        // Stop any existing cycle and respect the custom message.
-        return; 
-      }
-
+      if (!isGeneric) return; 
       if (!statusMessage) setStatusMessage(LOADING_MESSAGES[0]);
       
       interval = setInterval(() => {
         setStatusMessage(prev => {
-           // Double check inside interval
            if (!LOADING_MESSAGES.includes(prev)) return prev;
-
            const currentIdx = LOADING_MESSAGES.indexOf(prev);
            const nextIdx = (currentIdx + 1) % LOADING_MESSAGES.length;
            return LOADING_MESSAGES[nextIdx];
         });
-      }, 15000); // 15 seconds
+      }, 15000);
     }
     return () => clearInterval(interval);
   }, [isProcessing, statusMessage]);
@@ -400,7 +370,6 @@ const App: React.FC = () => {
       setOriginalImage(img.src);
       
       if (detectedRatio === '16:9') setGridLayout('3x3');
-
       setPanels([]); 
     } catch (error) {
       console.error("Error loading image:", error);
@@ -415,9 +384,8 @@ const App: React.FC = () => {
     if (!panel) return;
 
     try {
-      if (signal.aborted) throw new Error("Cancelled");
       const newImageUrl = await reimagineImage(panel.originalUrl, resolution, aspectRatio, mode);
-      if (signal.aborted) throw new Error("Cancelled");
+      if (signal.aborted) return;
 
       setPanels(prev => prev.map(p => p.id === id ? { 
         ...p, 
@@ -425,11 +393,11 @@ const App: React.FC = () => {
         aiGeneratedUrl: newImageUrl 
       } : p));
     } catch (error: any) {
-      if (error.message === "Cancelled" || signal.aborted) return;
-      if (error.message === "MISSING_API_KEY") {
-        setIsKeyModalOpen(true);
-        setIsProcessing(false);
-        return;
+      if (signal.aborted) return;
+      if (error.message?.includes("Requested entity was not found")) {
+         setIsAuthorized(false);
+         setIsProcessing(false);
+         return;
       }
       console.error(error);
       setPanels(prev => prev.map(p => p.id === id ? { ...p, status: 'error' } : p));
@@ -437,10 +405,7 @@ const App: React.FC = () => {
   };
 
   const handleStartProcessing = async () => {
-    if (!originalImage || !hasValidKey()) {
-      if (!hasValidKey()) setIsKeyModalOpen(true);
-      return;
-    }
+    if (!originalImage) return;
 
     try {
       setIsProcessing(true);
@@ -456,15 +421,7 @@ const App: React.FC = () => {
          try {
            const base64Str = imageToDataURL(img, 1024);
            currentBoundingBoxes = await detectPanels(base64Str);
-           if (!currentBoundingBoxes || currentBoundingBoxes.length === 0) {
-              alert("Auto-detect couldn't find any distinct panels. Falling back to default grid.");
-           }
          } catch (e: any) {
-            if (e.message === "MISSING_API_KEY") {
-              setIsKeyModalOpen(true);
-              setIsProcessing(false);
-              return;
-            }
             alert("Auto-Detection Failed.");
             setIsProcessing(false);
             return;
@@ -499,10 +456,7 @@ const App: React.FC = () => {
   };
 
   const handleResumeProcessing = async () => {
-    if (isProcessing || !hasValidKey()) {
-      if (!hasValidKey()) setIsKeyModalOpen(true);
-      return;
-    }
+    if (isProcessing) return;
     const remaining = panels.filter(p => p.status !== 'success');
     if (remaining.length === 0) return;
     setIsProcessing(true);
@@ -517,17 +471,14 @@ const App: React.FC = () => {
   };
 
   const handleRetryPanel = async (id: string) => {
-     if (isProcessing || !hasValidKey()) {
-      if (!hasValidKey()) setIsKeyModalOpen(true);
-      return;
-    }
+     if (isProcessing) return;
      setIsProcessing(true);
      abortControllerRef.current = new AbortController();
      await processPanel(id, panels, abortControllerRef.current.signal);
      setIsProcessing(false);
   };
 
-  // --- Handlers: Face Fix / Detail Fix ---
+  // --- Handlers: Face Fix ---
 
   const handleStagingTargetSelected = async (file: File) => {
     try {
@@ -545,12 +496,7 @@ const App: React.FC = () => {
 
   const handleAddToQueue = () => {
     if (!stagingTarget || !stagingRef) return;
-    
-    if (ffTargets.length >= 5) {
-      alert("Max 5 jobs in queue allowed.");
-      return;
-    }
-
+    if (ffTargets.length >= 5) { alert("Max 5 jobs in queue allowed."); return; }
     const newJob: FaceTarget = {
       id: crypto.randomUUID(),
       targetUrl: stagingTarget,
@@ -560,12 +506,9 @@ const App: React.FC = () => {
       status: 'idle',
       result: null
     };
-
     setFfTargets(prev => [...prev, newJob]);
     setStagingTarget(null);
-    if (!isRefLocked) {
-        setStagingRef(null);
-    }
+    if (!isRefLocked) setStagingRef(null);
     setStagingPos('');
   };
 
@@ -576,20 +519,8 @@ const App: React.FC = () => {
 
   const handleExecuteFaceFix = async (forceAll: boolean = false) => {
     if (ffTargets.length === 0) return;
-    if (!hasValidKey()) {
-      setIsKeyModalOpen(true);
-      return;
-    }
-
     const toProcess = forceAll ? ffTargets : ffTargets.filter(t => t.status !== 'success');
-    if (toProcess.length === 0) {
-      if (window.confirm("All items are complete. Re-run all?")) {
-         handleExecuteFaceFix(true);
-         return;
-      } else {
-        return;
-      }
-    }
+    if (toProcess.length === 0) return;
 
     setIsProcessing(true);
     abortControllerRef.current = new AbortController();
@@ -607,9 +538,7 @@ const App: React.FC = () => {
           const targetBase64 = imageToDataURL(targetImg);
           const refImg = new Image(); refImg.src = job.referenceUrl; await refImg.decode();
           const refBase64 = imageToDataURL(refImg);
-          
           const resultBase64 = await fixDetail(targetBase64, refBase64, resolution, job.fixType, job.position);
-          
           if (signal.aborted) break;
           setFfTargets(prev => prev.map(t => t.id === job.id ? { ...t, status: 'success', result: resultBase64 } : t));
         } catch (e: any) {
@@ -620,29 +549,19 @@ const App: React.FC = () => {
       }
     } catch (error: any) {
       console.error(error);
-      alert("Batch processing stopped: " + error.message);
     } finally {
       setIsProcessing(false);
-      // Only clear if successful finish or full abort, if loop broke early it clears too.
-      // But we might want to see the last message? 
-      // The requirement was about cycling speed. We clear it to be clean.
       setStatusMessage('');
     }
   };
 
   const handleRerunSingleFaceFix = async (id: string) => {
-     if (isProcessing || !hasValidKey()) {
-         if (!hasValidKey()) setIsKeyModalOpen(true);
-         return;
-     }
-     
+     if (isProcessing) return;
      const target = ffTargets.find(t => t.id === id);
      if (!target) return;
-
      setIsProcessing(true);
      abortControllerRef.current = new AbortController();
      const signal = abortControllerRef.current.signal;
-
      setFfTargets(prev => prev.map(t => t.id === id ? { ...t, status: 'processing' } : t));
      setStatusMessage("RE-RUNNING SINGLE JOB...");
 
@@ -651,9 +570,7 @@ const App: React.FC = () => {
           const targetBase64 = imageToDataURL(targetImg);
           const refImg = new Image(); refImg.src = target.referenceUrl; await refImg.decode();
           const refBase64 = imageToDataURL(refImg);
-          
           const resultBase64 = await fixDetail(targetBase64, refBase64, resolution, target.fixType, target.position);
-          
           if (!signal.aborted) {
               setFfTargets(prev => prev.map(t => t.id === id ? { ...t, status: 'success', result: resultBase64 } : t));
           }
@@ -700,13 +617,9 @@ const App: React.FC = () => {
 
   const handleExecuteChain = async () => {
       if (!chainSource || chainSteps.length === 0) return;
-      if (!hasValidKey()) { setIsKeyModalOpen(true); return; }
-
       setIsProcessing(true);
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
-
-      // Prepare Initial Image
       let currentImage = chainSource;
       let refImageBase64: string | null = null;
 
@@ -716,43 +629,29 @@ const App: React.FC = () => {
       }
 
       try {
-          // Reset steps to pending if re-running
           setChainSteps(prev => prev.map(s => ({ ...s, status: 'pending', resultUrl: undefined })));
-
           for (let i = 0; i < chainSteps.length; i++) {
               if (signal.aborted) break;
-
               const step = chainSteps[i];
               setChainSteps(prev => prev.map(s => s.id === step.id ? { ...s, status: 'processing' } : s));
               setStatusMessage(`EXECUTING CHAIN STEP ${i+1}/${chainSteps.length}: ${step.instruction.toUpperCase()}...`);
 
               try {
-                 // Ensure currentImage is base64 for API
                  const imgObj = new Image(); imgObj.src = currentImage; await imgObj.decode();
                  const currentBase64 = imageToDataURL(imgObj);
-
                  const result = await runChainCleaningStep(currentBase64, refImageBase64, step.instruction, resolution);
-                 
                  if (signal.aborted) break;
-
-                 // Update step with result
                  setChainSteps(prev => prev.map(s => s.id === step.id ? { ...s, status: 'completed', resultUrl: result } : s));
-                 
-                 // Update current image for next iteration
                  currentImage = result;
-
               } catch (e) {
                  if (signal.aborted) break;
                  console.error(e);
                  setChainSteps(prev => prev.map(s => s.id === step.id ? { ...s, status: 'error' } : s));
-                 // Break chain on error
                  break;
               }
           }
-
       } catch (error: any) {
           console.error(error);
-          alert("Chain execution failed: " + error.message);
       } finally {
           setIsProcessing(false);
           setStatusMessage('');
@@ -765,13 +664,6 @@ const App: React.FC = () => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     setIsProcessing(false);
     setStatusMessage('');
-    if (appMode === 'grid_split') {
-        setPanels(prev => prev.map(p => (p.status === 'analyzing' || p.status === 'generating') ? { ...p, status: 'idle' } : p));
-    } else if (appMode === 'face_fix') {
-        setFfTargets(prev => prev.map(t => t.status === 'processing' ? { ...t, status: 'idle' } : t));
-    } else if (appMode === 'chain_clean') {
-        // Chain clean usually just stops where it is
-    }
   };
 
   const reset = () => {
@@ -805,7 +697,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-black p-4 md:p-8 relative selection:bg-[#5CFF72] selection:text-black">
       
-      <ApiKeyModal isOpen={isKeyModalOpen} onClose={() => setIsKeyModalOpen(false)} />
+      {!isAuthorized && <AuthOverlay onAuthorize={handleAuthorize} />}
       
       {lightboxData && (
           <Lightbox 
@@ -879,9 +771,9 @@ const App: React.FC = () => {
       {/* Header & Navigation */}
       <header className="max-w-7xl mx-auto mb-8 border-b-2 border-[#2B2B2B] pb-6 flex flex-col items-center justify-center gap-6 relative">
          <div className="absolute right-0 top-0">
-          <button onClick={() => setIsKeyModalOpen(true)} className="flex items-center gap-2 text-[#2B2B2B] hover:text-[#5CFF72] transition-colors" title="Edit API Key">
+          <button onClick={handleAuthorize} className="flex items-center gap-2 text-[#2B2B2B] hover:text-[#FFD43B] transition-colors" title="Change API Key">
              <Key size={16} />
-             <span className="text-xs font-bold uppercase hidden md:inline">API KEY</span>
+             <span className="text-xs font-bold uppercase hidden md:inline">CHANGE KEY</span>
           </button>
         </div>
 
@@ -1022,7 +914,6 @@ const App: React.FC = () => {
         {/* --- GRID SPLIT MODE --- */}
         {appMode === 'grid_split' && (
           <>
-            {/* VIEW 1: UPLOAD */}
             {!originalImage && (
               <div className="mt-12">
                 <ImageDropzone onImageSelected={handleImageSelected} />
@@ -1032,10 +923,8 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* VIEW 2: CONFIGURATION DASHBOARD */}
             {originalImage && panels.length === 0 && (
               <div className="grid lg:grid-cols-12 gap-8 border-t border-l border-[#2B2B2B] p-1">
-                 {/* Left Column: Preview */}
                  <div className="lg:col-span-5 bg-[#050505] p-6 border-b border-r border-[#2B2B2B]">
                     <div className="flex items-center justify-between text-[#FFD43B] mb-4 text-xs font-bold uppercase tracking-widest">
                       <span>> Source_Preview</span>
@@ -1050,7 +939,6 @@ const App: React.FC = () => {
                     <FAQSection />
                  </div>
 
-                 {/* Right Column: Parameters */}
                  <div className="lg:col-span-7 bg-[#050505] p-6 border-b border-r border-[#2B2B2B] flex flex-col h-full">
                     <h2 className="text-xl font-bold text-[#5CFF72] mb-6 border-b border-[#5CFF72] inline-block pb-1 uppercase">
                       Operation Parameters
@@ -1115,9 +1003,8 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {/* VIEW 3: RESULTS GRID */}
             {panels.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-12">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-12 pb-24">
                 {panels.map((panel) => (
                   <div key={panel.id} className="relative group bg-[#050505] border border-[#2B2B2B] hover:border-[#5CFF72] transition-colors p-2">
                     <div className="absolute top-4 left-4 z-10 pointer-events-none">
@@ -1130,7 +1017,6 @@ const App: React.FC = () => {
                       className={`relative ${aspectRatio === '9:16' ? 'aspect-[9/16]' : 'aspect-video'} bg-black overflow-hidden mb-2 cursor-pointer`}
                     >
                       <img src={panel.aiGeneratedUrl || panel.originalUrl} className={`w-full h-full object-cover transition-all duration-700 ${panel.status === 'generating' ? 'opacity-50 blur-sm scale-105' : 'opacity-100 scale-100'}`} alt={`Panel ${panel.index}`} />
-                      
                       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
                          <div className="bg-black/80 border border-[#5CFF72] text-[#5CFF72] p-2 rounded-full">
                             <ZoomIn size={24} />
@@ -1140,20 +1026,11 @@ const App: React.FC = () => {
                     <div className="flex items-center justify-between px-2">
                       <span className="text-[#E0E083] font-mono text-xs">PANEL_0{panel.index + 1}</span>
                       <div className="flex gap-2">
-                         <button 
-                            onClick={() => handleRetryPanel(panel.id)} 
-                            disabled={isProcessing} 
-                            className="p-1.5 text-[#E0E083] hover:text-[#FFD43B] hover:bg-[#2B2B2B]"
-                            title="Rerun this panel"
-                          >
+                         <button onClick={() => handleRetryPanel(panel.id)} disabled={isProcessing} className="p-1.5 text-[#E0E083] hover:text-[#FFD43B] hover:bg-[#2B2B2B]" title="Rerun this panel">
                            <RefreshCw size={14} className={isProcessing ? 'opacity-50' : ''} />
                          </button>
                          {panel.aiGeneratedUrl && (
-                           <button 
-                             onClick={() => downloadImage(panel.aiGeneratedUrl!, `ungrid-panel-${panel.index+1}.png`)} 
-                             className="p-1.5 text-[#5CFF72] hover:text-white hover:bg-[#2B2B2B]"
-                             title="Download"
-                           >
+                           <button onClick={() => downloadImage(panel.aiGeneratedUrl!, `ungrid-panel-${panel.index+1}.png`)} className="p-1.5 text-[#5CFF72] hover:text-white hover:bg-[#2B2B2B]" title="Download">
                               <Download size={14} />
                            </button>
                          )}
@@ -1166,11 +1043,9 @@ const App: React.FC = () => {
           </>
         )}
 
-        {/* --- FACE FIX / DETAIL FIX MODE --- */}
+        {/* --- FACE FIX MODE --- */}
         {appMode === 'face_fix' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-             
-             {/* 1. COMPOSE JOB AREA: Side by Side */}
              <div className="mb-12 border-b border-[#2B2B2B] pb-8">
                 <div className="flex items-center justify-between mb-4">
                    <div className="flex items-center gap-2">
@@ -1179,9 +1054,7 @@ const App: React.FC = () => {
                    </div>
                    <button onClick={() => { setStagingTarget(null); setStagingRef(null); setStagingPos(''); setIsRefLocked(false); }} className="text-[#E0E083] text-[10px] hover:text-white uppercase">Clear Staging</button>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8 mb-4">
-                  {/* LEFT: TARGET */}
                   <div className="relative">
                      {stagingTarget ? (
                        <div className="h-64 border border-[#5CFF72] bg-[#050505] relative flex flex-col">
@@ -1191,32 +1064,19 @@ const App: React.FC = () => {
                           <div className="flex-grow flex items-center justify-center p-2 overflow-hidden">
                              <img src={stagingTarget} className="max-w-full max-h-full object-contain" />
                           </div>
-                          <div className="bg-[#5CFF72] text-black text-[10px] font-bold px-2 py-1 uppercase text-center">
-                             Target Image
-                          </div>
+                          <div className="bg-[#5CFF72] text-black text-[10px] font-bold px-2 py-1 uppercase text-center">Target Image</div>
                        </div>
                      ) : (
                        <div className="h-64">
-                          <ImageDropzone 
-                            onImageSelected={handleStagingTargetSelected} 
-                            title="> TARGET IMAGE"
-                            description="Image to be fixed (Face crop or Full Body)"
-                            compact={true}
-                          />
+                          <ImageDropzone onImageSelected={handleStagingTargetSelected} title="> TARGET IMAGE" description="Image to be fixed" compact={true} />
                        </div>
                      )}
                   </div>
-
-                  {/* RIGHT: REFERENCE */}
                   <div className="relative">
                      {stagingRef ? (
                        <div className={`h-64 border ${isRefLocked ? 'border-[#5CFF72] shadow-[0_0_10px_rgba(92,255,114,0.2)]' : 'border-[#FFD43B]'} bg-[#050505] relative flex flex-col transition-all duration-300`}>
                           <div className="absolute top-2 right-2 z-10 flex gap-2">
-                             <button 
-                               onClick={() => setIsRefLocked(!isRefLocked)} 
-                               className={`p-1 border transition-all ${isRefLocked ? 'bg-[#5CFF72] text-black border-[#5CFF72]' : 'bg-black/80 text-[#FFD43B] border-[#FFD43B] hover:text-white'}`}
-                               title={isRefLocked ? "Reference Locked (Won't clear after add)" : "Reference Unlocked (Will clear after add)"}
-                             >
+                             <button onClick={() => setIsRefLocked(!isRefLocked)} className={`p-1 border transition-all ${isRefLocked ? 'bg-[#5CFF72] text-black border-[#5CFF72]' : 'bg-black/80 text-[#FFD43B] border-[#FFD43B] hover:text-white'}`}>
                                {isRefLocked ? <Lock size={14} /> : <Unlock size={14} />}
                              </button>
                              <button onClick={() => { setStagingRef(null); setIsRefLocked(false); }} className="bg-black/80 text-red-500 hover:text-white p-1 border border-red-500"><X size={14}/></button>
@@ -1225,76 +1085,39 @@ const App: React.FC = () => {
                              <img src={stagingRef} className="max-w-full max-h-full object-contain" />
                           </div>
                           <div className={`${isRefLocked ? 'bg-[#5CFF72]' : 'bg-[#FFD43B]'} text-black text-[10px] font-bold px-2 py-1 uppercase text-center flex items-center justify-center gap-2`}>
-                             {isRefLocked ? <Lock size={10} /> : null} Reference Image
+                             Reference Image
                           </div>
                        </div>
                      ) : (
                        <div className="h-64">
-                          <ImageDropzone 
-                            onImageSelected={handleStagingRefSelected} 
-                            title="> REFERENCE"
-                            description="Source / Character Sheet (High Fidelity)"
-                            compact={true}
-                          />
+                          <ImageDropzone onImageSelected={handleStagingRefSelected} title="> REFERENCE" description="Source / Character Sheet" compact={true} />
                        </div>
                      )}
                   </div>
                 </div>
-
-                {/* BOTTOM: CONTEXT, MODE & ADD */}
                 <div className="flex flex-col md:flex-row gap-4 items-stretch">
-                   {/* Mode Selector */}
                    <div className="flex gap-2 bg-[#111] p-1 border border-[#2B2B2B]">
-                      <button
-                        onClick={() => setStagingFixType('face')}
-                        className={`px-4 py-2 uppercase text-[10px] font-bold transition-all flex items-center gap-2 
-                        ${stagingFixType === 'face' ? 'bg-[#5CFF72] text-black' : 'text-[#E0E083] hover:text-white'}`}
-                      >
+                      <button onClick={() => setStagingFixType('face')} className={`px-4 py-2 uppercase text-[10px] font-bold transition-all flex items-center gap-2 ${stagingFixType === 'face' ? 'bg-[#5CFF72] text-black' : 'text-[#E0E083] hover:text-white'}`}>
                          <User size={14} /> Face Fix
                       </button>
-                      <button
-                        onClick={() => setStagingFixType('line')}
-                        className={`px-4 py-2 uppercase text-[10px] font-bold transition-all flex items-center gap-2 
-                        ${stagingFixType === 'line' ? 'bg-[#FFD43B] text-black' : 'text-[#E0E083] hover:text-white'}`}
-                      >
+                      <button onClick={() => setStagingFixType('line')} className={`px-4 py-2 uppercase text-[10px] font-bold transition-all flex items-center gap-2 ${stagingFixType === 'line' ? 'bg-[#FFD43B] text-black' : 'text-[#E0E083] hover:text-white'}`}>
                          <PenTool size={14} /> Linework Fix
                       </button>
                    </div>
-
                    <div className="flex-grow">
-                      <input 
-                        type="text" 
-                        value={stagingPos}
-                        onChange={(e) => setStagingPos(e.target.value)}
-                        placeholder="Optional Context: e.g. looking left, cinematic lighting..."
-                        className="w-full h-full bg-[#111] border border-[#2B2B2B] text-white px-4 py-3 focus:outline-none focus:border-[#5CFF72] font-mono text-sm placeholder:text-[#333]"
-                      />
+                      <input type="text" value={stagingPos} onChange={(e) => setStagingPos(e.target.value)} placeholder="Optional Context: e.g. looking left..." className="w-full h-full bg-[#111] border border-[#2B2B2B] text-white px-4 py-3 focus:outline-none focus:border-[#5CFF72] font-mono text-sm placeholder:text-[#333]" />
                    </div>
-                   <button 
-                     onClick={handleAddToQueue}
-                     disabled={!stagingTarget || !stagingRef || ffTargets.length >= 5}
-                     className={`px-8 py-3 uppercase font-bold text-sm flex items-center gap-2 transition-all
-                     ${(!stagingTarget || !stagingRef || ffTargets.length >= 5) 
-                        ? 'bg-[#2B2B2B] text-[#555] cursor-not-allowed' 
-                        : 'bg-[#5CFF72] text-black hover:bg-white'}`}
-                   >
+                   <button onClick={handleAddToQueue} disabled={!stagingTarget || !stagingRef || ffTargets.length >= 5} className={`px-8 py-3 uppercase font-bold text-sm flex items-center gap-2 transition-all ${(!stagingTarget || !stagingRef || ffTargets.length >= 5) ? 'bg-[#2B2B2B] text-[#555] cursor-not-allowed' : 'bg-[#5CFF72] text-black hover:bg-white'}`}>
                      <Plus size={18} /> Add to Queue
                    </button>
                 </div>
              </div>
-
-             {/* 2. QUEUE LIST */}
              {ffTargets.length > 0 && (
                 <div className="mb-12 animate-in slide-in-from-bottom-2">
-                   <div className="flex items-center gap-2 mb-4">
-                     <h2 className="text-[#FFD43B] font-bold text-sm uppercase">2. Processing Queue</h2>
-                   </div>
-                   
+                   <h2 className="text-[#FFD43B] font-bold text-sm uppercase mb-4">2. Processing Queue</h2>
                    <div className="grid grid-cols-1 gap-4">
                       {ffTargets.map((job, index) => (
                          <div key={job.id} className={`border p-2 bg-[#050505] flex flex-col md:flex-row gap-4 transition-all relative ${job.status === 'processing' ? 'border-[#5CFF72] shadow-[0_0_15px_rgba(92,255,114,0.1)]' : 'border-[#2B2B2B]'}`}>
-                            
-                            {/* Inputs Column */}
                             <div className="flex flex-col gap-2 w-full md:w-48 shrink-0">
                                <div className="flex justify-between items-center">
                                   <span className="text-[#5CFF72] font-bold text-xs uppercase">> JOB_0{index + 1}</span>
@@ -1305,12 +1128,9 @@ const App: React.FC = () => {
                                      <button onClick={() => handleRemoveJob(job.id)} className={`text-red-500 hover:text-white ${isProcessing ? 'hidden' : ''}`}><X size={14}/></button>
                                   </div>
                                </div>
-
-                               <div className={`text-[10px] font-bold uppercase px-2 py-1 text-center border
-                                 ${job.fixType === 'face' ? 'border-[#5CFF72] text-[#5CFF72]' : 'border-[#FFD43B] text-[#FFD43B]'}`}>
+                               <div className={`text-[10px] font-bold uppercase px-2 py-1 text-center border ${job.fixType === 'face' ? 'border-[#5CFF72] text-[#5CFF72]' : 'border-[#FFD43B] text-[#FFD43B]'}`}>
                                    {job.fixType === 'face' ? 'FACE FIX' : 'LINE FIX'}
                                </div>
-
                                <div className="flex gap-1 h-20">
                                   <div className="w-1/2 border border-[#2B2B2B] relative group">
                                      <img src={job.targetUrl} className="w-full h-full object-cover opacity-70" />
@@ -1321,41 +1141,14 @@ const App: React.FC = () => {
                                      <div className="absolute bottom-0 left-0 bg-black/80 text-[8px] text-[#FFD43B] px-1 w-full truncate">REF</div>
                                   </div>
                                </div>
-                               <div className="text-[10px] text-[#555] truncate font-mono px-1">
-                                 {job.position || "No context"}
-                               </div>
                             </div>
-
-                            {/* Result Area (Takes remaining space) */}
                             <div className="flex-grow bg-black/30 border-l border-[#2B2B2B] pl-0 md:pl-4 min-h-[150px] flex items-center justify-center relative">
                                {job.result ? (
-                                 <div 
-                                    onClick={() => setLightboxData({ url: job.result!, title: `Detail Fix Result #${index+1}` })}
-                                    className="relative w-full h-full flex items-center justify-center group cursor-pointer"
-                                 >
+                                 <div onClick={() => setLightboxData({ url: job.result!, title: `Detail Fix Result #${index+1}` })} className="relative w-full h-full flex items-center justify-center group cursor-pointer">
                                     <img src={job.result} className="max-w-full max-h-[300px] object-contain shadow-lg" />
-                                    {/* Overlay Actions */}
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 pointer-events-none">
-                                        <div className="bg-black border border-[#5CFF72] text-[#5CFF72] p-2 rounded-full">
-                                            <ZoomIn size={24} />
-                                        </div>
-                                    </div>
                                     <div className="absolute bottom-2 right-2 flex gap-2 pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity">
-                                       <button 
-                                          onClick={(e) => { e.stopPropagation(); handleRerunSingleFaceFix(job.id); }}
-                                          disabled={isProcessing}
-                                          className="bg-[#2B2B2B] text-[#FFD43B] p-2 rounded-full border border-[#FFD43B] hover:bg-[#FFD43B] hover:text-black transition-colors"
-                                          title="Rerun this job"
-                                       >
-                                          <RefreshCw size={20} className={isProcessing ? 'animate-spin' : ''} />
-                                       </button>
-                                       <button 
-                                          onClick={(e) => { e.stopPropagation(); downloadImage(job.result!, `detail-fix-${index+1}.png`); }}
-                                          className="bg-[#5CFF72] text-black p-2 rounded-full border border-[#5CFF72] hover:bg-white transition-colors"
-                                          title="Download result"
-                                       >
-                                          <Download size={20} />
-                                       </button>
+                                       <button onClick={(e) => { e.stopPropagation(); handleRerunSingleFaceFix(job.id); }} disabled={isProcessing} className="bg-[#2B2B2B] text-[#FFD43B] p-2 rounded-full border border-[#FFD43B] hover:bg-[#FFD43B] hover:text-black transition-colors" title="Rerun job"><RefreshCw size={20} className={isProcessing ? 'animate-spin' : ''} /></button>
+                                       <button onClick={(e) => { e.stopPropagation(); downloadImage(job.result!, `detail-fix-${index+1}.png`); }} className="bg-[#5CFF72] text-black p-2 rounded-full border border-[#5CFF72] hover:bg-white transition-colors" title="Download result"><Download size={20} /></button>
                                     </div>
                                  </div>
                                ) : (
@@ -1365,61 +1158,24 @@ const App: React.FC = () => {
                                  </div>
                                )}
                             </div>
-
                          </div>
                       ))}
                    </div>
                 </div>
              )}
-
-             {/* 3. EXECUTION CONTROL */}
              {ffTargets.length > 0 && (
-                <div className="max-w-2xl mx-auto border-t border-[#2B2B2B] pt-8 pb-20">
-                   {/* Resolution Selector for Face Fix */}
-                   <div className="mb-8">
-                      <label className="text-[#FFD43B] text-xs font-bold uppercase mb-2 block text-center">
-                        Global Target Resolution
-                      </label>
+                <div className="max-w-2xl mx-auto border-t border-[#2B2B2B] pt-8 pb-32">
+                   <div className="mb-8 text-center">
+                      <label className="text-[#FFD43B] text-xs font-bold uppercase mb-2 block">Global Resolution</label>
                       <div className="flex justify-center gap-4">
                         {(['1K', '2K', '4K'] as Resolution[]).map((res) => (
-                           <button
-                             key={res}
-                             onClick={() => setResolution(res)}
-                             className={`px-6 py-2 border text-sm font-bold font-mono transition-all
-                             ${resolution === res ? 'bg-[#FFD43B] text-black border-[#FFD43B]' : 'bg-transparent text-[#E0E083] border-[#2B2B2B] hover:border-[#FFD43B]'}`}
-                           >
-                             [{res}]
-                           </button>
+                           <button key={res} onClick={() => setResolution(res)} className={`px-6 py-2 border text-sm font-bold font-mono transition-all ${resolution === res ? 'bg-[#FFD43B] text-black border-[#FFD43B]' : 'bg-transparent text-[#E0E083] border-[#2B2B2B] hover:border-[#FFD43B]'}`}>[{res}]</button>
                         ))}
                       </div>
                    </div>
-
-                   <button
-                      onClick={() => handleExecuteFaceFix(false)}
-                      disabled={isProcessing}
-                      className={`w-full text-black text-lg font-bold py-4 border-2 transition-colors uppercase tracking-widest flex items-center justify-center gap-4 group
-                      ${isProcessing 
-                        ? 'bg-[#5CFF72]/20 border-[#5CFF72] text-[#5CFF72]' 
-                        : 'bg-[#5CFF72] border-[#5CFF72] hover:bg-transparent hover:text-[#5CFF72]'}`}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 size={24} className="animate-spin" />
-                          <span>PROCESSING BATCH...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Zap size={24} />
-                          <span>EXECUTE SEQUENCE</span>
-                        </>
-                      )}
+                   <button onClick={() => handleExecuteFaceFix(false)} disabled={isProcessing} className={`w-full text-black text-lg font-bold py-4 border-2 transition-colors uppercase tracking-widest flex items-center justify-center gap-4 group ${isProcessing ? 'bg-[#5CFF72]/20 border-[#5CFF72] text-[#5CFF72]' : 'bg-[#5CFF72] border-[#5CFF72] hover:bg-transparent hover:text-[#5CFF72]'}`}>
+                      {isProcessing ? (<><Loader2 size={24} className="animate-spin" /><span>PROCESSING...</span></>) : (<><Zap size={24} /><span>EXECUTE BATCH</span></>)}
                     </button>
-                </div>
-             )}
-             
-             {ffTargets.length === 0 && !stagingTarget && !stagingRef && (
-                <div className="max-w-2xl mx-auto mt-12">
-                   <FAQSection />
                 </div>
              )}
           </div>
@@ -1427,231 +1183,65 @@ const App: React.FC = () => {
 
         {/* --- CHAIN CLEAN MODE --- */}
         {appMode === 'chain_clean' && (
-           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 pb-20">
-               
-               {/* COLUMN 1: INPUTS */}
+           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 pb-32">
                <div className="lg:col-span-3 space-y-4">
                   <div className="bg-[#050505] border border-[#2B2B2B] p-4">
-                      <h3 className="text-[#5CFF72] font-bold text-xs uppercase mb-3 flex items-center gap-2"><ImageIcon size={14}/> 1. Source Image</h3>
+                      <h3 className="text-[#5CFF72] font-bold text-xs uppercase mb-3 flex items-center gap-2"><ImageIcon size={14}/> 1. Source</h3>
                       {chainSource ? (
                           <div className="relative border border-[#2B2B2B] group">
                               <img src={chainSource} className="w-full h-auto" />
                               <button onClick={() => setChainSource(null)} className="absolute top-1 right-1 bg-black text-red-500 p-1 border border-red-500"><X size={12}/></button>
                           </div>
                       ) : (
-                          <ImageDropzone 
-                            onImageSelected={handleChainSourceSelected} 
-                            compact={true} 
-                            title="SOURCE"
-                            description="[INPUT]: Source Image (To be cleaned)"
-                          />
+                          <ImageDropzone onImageSelected={handleChainSourceSelected} compact={true} title="SOURCE" />
                       )}
                   </div>
                   <div className="bg-[#050505] border border-[#2B2B2B] p-4">
-                      <h3 className="text-[#FFD43B] font-bold text-xs uppercase mb-3 flex items-center gap-2"><Layers size={14}/> 2. Reference (Opt)</h3>
+                      <h3 className="text-[#FFD43B] font-bold text-xs uppercase mb-3 flex items-center gap-2"><Layers size={14}/> 2. Reference</h3>
                       {chainRef ? (
                           <div className="relative border border-[#2B2B2B] group">
                               <img src={chainRef} className="w-full h-auto" />
                               <button onClick={() => setChainRef(null)} className="absolute top-1 right-1 bg-black text-red-500 p-1 border border-red-500"><X size={12}/></button>
                           </div>
                       ) : (
-                          <ImageDropzone 
-                            onImageSelected={handleChainRefSelected} 
-                            compact={true} 
-                            title="REF STYLE" 
-                            description="[INPUT]: Reference Image (For Style/Details)"
-                          />
+                          <ImageDropzone onImageSelected={handleChainRefSelected} compact={true} title="REF" />
                       )}
                   </div>
-                  <div className="bg-[#050505] border border-[#2B2B2B] p-4">
-                       <h3 className="text-[#E0E083] font-bold text-xs uppercase mb-3">Resolution</h3>
-                       <div className="flex gap-2">
-                        {(['1K', '2K', '4K'] as Resolution[]).map((res) => (
-                           <button
-                             key={res}
-                             onClick={() => setResolution(res)}
-                             className={`flex-1 py-1 border text-xs font-bold font-mono transition-all
-                             ${resolution === res ? 'bg-[#E0E083] text-black border-[#E0E083]' : 'bg-transparent text-[#555] border-[#2B2B2B] hover:border-[#E0E083]'}`}
-                           >
-                             {res}
-                           </button>
-                        ))}
-                      </div>
-                  </div>
                </div>
-
-               {/* COLUMN 2: RECIPE BUILDER */}
-               <div className="lg:col-span-4 bg-[#050505] border border-[#2B2B2B] p-4 flex flex-col h-[80vh] sticky top-4">
+               <div className="lg:col-span-4 bg-[#050505] border border-[#2B2B2B] p-4 flex flex-col h-[75vh] sticky top-4">
                    <h3 className="text-[#5CFF72] font-bold text-xs uppercase mb-4 flex items-center gap-2"><Wand2 size={14}/> 3. Chain Recipe</h3>
-                   
                    <div className="flex-grow overflow-y-auto space-y-4 mb-4 pr-2">
-                       {chainSteps.length === 0 && (
-                           <div className="text-center text-[#333] py-12 text-xs font-mono border-2 border-dashed border-[#2B2B2B]">
-                               NO STEPS ADDED.<br/>ADD INSTRUCTIONS BELOW.
-                           </div>
-                       )}
+                       {chainSteps.length === 0 && <div className="text-center text-[#333] py-12 text-xs font-mono border-2 border-dashed border-[#2B2B2B]">NO STEPS ADDED.</div>}
                        {chainSteps.map((step, index) => (
                            <div key={step.id} className="relative flex items-center">
-                               {/* Connector Line */}
-                               {index < chainSteps.length - 1 && (
-                                   <div className="absolute left-[15px] top-[30px] w-0.5 h-10 bg-[#2B2B2B] z-0"></div>
-                               )}
-                               
-                               <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 z-10 bg-black
-                                   ${step.status === 'completed' ? 'border-[#5CFF72] text-[#5CFF72]' : 
-                                     step.status === 'processing' ? 'border-[#FFD43B] text-[#FFD43B]' : 
-                                     step.status === 'error' ? 'border-red-500 text-red-500' : 
-                                     'border-[#555] text-[#555]'}`}>
+                               <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shrink-0 z-10 bg-black ${step.status === 'completed' ? 'border-[#5CFF72] text-[#5CFF72]' : step.status === 'processing' ? 'border-[#FFD43B] text-[#FFD43B]' : 'border-[#555] text-[#555]'}`}>
                                    <span className="text-xs font-bold">{index + 1}</span>
                                </div>
-                               <div className={`ml-4 flex-grow p-3 border text-xs font-bold uppercase flex justify-between items-center
-                                   ${step.status === 'processing' ? 'bg-[#FFD43B]/10 border-[#FFD43B] text-[#FFD43B]' : 
-                                     step.status === 'completed' ? 'bg-[#5CFF72]/10 border-[#5CFF72] text-[#5CFF72]' :
-                                     'bg-[#111] border-[#2B2B2B] text-[#E0E083]'}`}>
+                               <div className={`ml-4 flex-grow p-3 border text-xs font-bold uppercase flex justify-between items-center ${step.status === 'processing' ? 'bg-[#FFD43B]/10 border-[#FFD43B] text-[#FFD43B]' : step.status === 'completed' ? 'bg-[#5CFF72]/10 border-[#5CFF72] text-[#5CFF72]' : 'bg-[#111] border-[#2B2B2B] text-[#E0E083]'}`}>
                                    <span>{step.instruction}</span>
-                                   <button 
-                                      onClick={() => handleRemoveChainStep(step.id)} 
-                                      className="text-red-500 opacity-50 hover:opacity-100"
-                                      disabled={isProcessing}
-                                    >
-                                       <X size={14}/>
-                                   </button>
+                                   <button onClick={() => handleRemoveChainStep(step.id)} className="text-red-500 opacity-50 hover:opacity-100" disabled={isProcessing}><X size={14}/></button>
                                </div>
                            </div>
                        ))}
                    </div>
-
-                   {/* Add Step Controls */}
                    <div className="border-t border-[#2B2B2B] pt-4">
-                       <label className="text-[#555] text-[10px] font-bold uppercase mb-2 block">Quick Presets</label>
-                       <div className="flex flex-wrap gap-2 mb-4">
-                           {["Denoise", "Deblur", "Fix Eyes", "Clean Lines", "Fix Distortion"].map(preset => (
-                               <button 
-                                 key={preset}
-                                 onClick={() => handleAddChainStep(preset)}
-                                 disabled={isProcessing}
-                                 className="px-2 py-1 border border-[#2B2B2B] text-[#E0E083] text-[10px] hover:bg-[#E0E083] hover:text-black uppercase transition-colors"
-                               >
-                                   + {preset}
-                               </button>
-                           ))}
-                       </div>
                        <div className="flex gap-2">
-                           <input 
-                             type="text" 
-                             value={chainInputText}
-                             onChange={(e) => setChainInputText(e.target.value)}
-                             onKeyDown={(e) => e.key === 'Enter' && handleAddChainStep(chainInputText)}
-                             placeholder="Custom instruction..."
-                             disabled={isProcessing}
-                             className="flex-grow bg-[#111] border border-[#2B2B2B] px-3 py-2 text-xs text-white focus:outline-none focus:border-[#5CFF72]"
-                           />
-                           <button 
-                             onClick={() => handleAddChainStep(chainInputText)}
-                             disabled={!chainInputText.trim() || isProcessing}
-                             className="bg-[#2B2B2B] text-[#5CFF72] px-3 py-2 border border-[#2B2B2B] hover:bg-[#5CFF72] hover:text-black font-bold uppercase text-xs"
-                           >
-                               ADD
-                           </button>
+                           <input type="text" value={chainInputText} onChange={(e) => setChainInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddChainStep(chainInputText)} placeholder="Custom instruction..." disabled={isProcessing} className="flex-grow bg-[#111] border border-[#2B2B2B] px-3 py-2 text-xs text-white focus:outline-none focus:border-[#5CFF72]" />
+                           <button onClick={() => handleAddChainStep(chainInputText)} disabled={!chainInputText.trim() || isProcessing} className="bg-[#2B2B2B] text-[#5CFF72] px-3 py-2 border border-[#2B2B2B] hover:bg-[#5CFF72] hover:text-black font-bold uppercase text-xs">ADD</button>
                        </div>
                    </div>
                </div>
-
-               {/* COLUMN 3: EXECUTION / OUTPUT */}
                <div className="lg:col-span-5 space-y-6">
-                   <h3 className="text-[#FFD43B] font-bold text-xs uppercase flex items-center gap-2 border-b border-[#2B2B2B] pb-2">
-                       <Sparkles size={14}/> 4. Chain Output Visualization
-                   </h3>
-                   
-                   {!chainSource && (
-                       <div className="h-64 border border-[#2B2B2B] bg-[#050505] flex items-center justify-center text-[#333] text-xs font-mono">
-                           WAITING FOR SOURCE...
-                       </div>
-                   )}
-
-                   {chainSource && chainSteps.length === 0 && (
-                       <div className="h-64 border border-[#2B2B2B] bg-[#050505] flex items-center justify-center text-[#333] text-xs font-mono">
-                           ADD STEPS TO VISUALIZE CHAIN...
-                       </div>
-                   )}
-
+                   <h3 className="text-[#FFD43B] font-bold text-xs uppercase flex items-center gap-2 border-b border-[#2B2B2B] pb-2">4. Output Visualization</h3>
                    {chainSource && chainSteps.length > 0 && (
-                       <div className="space-y-0 relative">
-                           {/* Source Node */}
-                           <div className="flex gap-4">
-                               <div className="flex flex-col items-center">
-                                   <div className="w-2 h-full bg-[#2B2B2B] mb-2"></div>
-                               </div>
-                               <div className="w-24 h-16 bg-[#111] border border-[#2B2B2B] overflow-hidden shrink-0 opacity-50 grayscale">
-                                   <img src={chainSource} className="w-full h-full object-cover" />
-                               </div>
-                               <div className="py-4 text-[#555] text-xs font-mono">ORIGINAL SOURCE</div>
-                           </div>
-
-                           {/* Render Steps */}
+                       <div className="space-y-4">
                            {chainSteps.map((step, idx) => (
-                               <div key={step.id} className="flex gap-4 animate-in fade-in slide-in-from-top-4">
-                                   <div className="flex flex-col items-center ml-[3px]">
-                                        <ArrowDown size={16} className="text-[#5CFF72] mb-1" />
-                                        <div className={`w-0.5 h-full ${step.status === 'completed' ? 'bg-[#5CFF72]' : 'bg-[#2B2B2B]'}`}></div>
-                                   </div>
-                                   
-                                   <div className="flex-grow pb-8">
-                                       <div className={`border p-1 bg-black relative group transition-all duration-500
-                                           ${step.status === 'completed' ? 'border-[#5CFF72] shadow-[0_0_20px_rgba(92,255,114,0.1)]' : 'border-[#2B2B2B]'}`}>
-                                           
-                                           <div 
-                                              onClick={() => step.resultUrl && setLightboxData({ url: step.resultUrl, title: step.instruction })}
-                                              className={`aspect-video bg-[#050505] flex items-center justify-center overflow-hidden cursor-pointer
-                                               ${step.status === 'processing' ? 'animate-pulse' : ''}`}
-                                           >
-                                               {step.resultUrl ? (
-                                                   <>
-                                                     <img src={step.resultUrl} className="w-full h-full object-contain" />
-                                                     <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 flex items-center justify-center">
-                                                         <div className="bg-black/80 border border-[#5CFF72] text-[#5CFF72] p-2 rounded-full">
-                                                            <ZoomIn size={16} />
-                                                         </div>
-                                                     </div>
-                                                   </>
-                                               ) : (
-                                                   <div className="text-[#333] text-[10px] font-mono">
-                                                       {step.status === 'pending' ? 'WAITING...' : step.status === 'processing' ? 'GENERATING...' : 'FAILED'}
-                                                   </div>
-                                               )}
-                                           </div>
-
-                                           {step.resultUrl && (
-                                                <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button 
-                                                      onClick={(e) => { e.stopPropagation(); downloadImage(step.resultUrl!, `chain-step-${idx+1}.png`); }} 
-                                                      className="bg-black text-[#5CFF72] p-1 border border-[#5CFF72] hover:bg-[#5CFF72] hover:text-black"
-                                                    >
-                                                      <Download size={14}/>
-                                                    </button>
-                                                </div>
-                                           )}
-                                           
-                                           <div className="absolute -left-[54px] top-6 bg-black border border-[#2B2B2B] text-[9px] text-[#E0E083] px-1 py-0.5 uppercase w-10 text-center">
-                                               STEP {idx + 1}
-                                           </div>
-                                       </div>
-                                       <div className="mt-1 text-[#E0E083] text-xs font-bold uppercase tracking-wide">
-                                           {step.instruction}
-                                       </div>
+                               <div key={step.id} className="border p-1 bg-black transition-all">
+                                   <div onClick={() => step.resultUrl && setLightboxData({ url: step.resultUrl, title: step.instruction })} className={`aspect-video bg-[#050505] flex items-center justify-center overflow-hidden cursor-pointer ${step.status === 'processing' ? 'animate-pulse' : ''}`}>
+                                       {step.resultUrl ? <img src={step.resultUrl} className="w-full h-full object-contain" /> : <div className="text-[#333] text-[10px] font-mono">{step.status === 'pending' ? 'WAITING...' : 'GENERATING...'}</div>}
                                    </div>
                                </div>
                            ))}
-
-                           {/* Final Arrow */}
-                           {chainSteps.every(s => s.status === 'completed') && (
-                               <div className="flex gap-4">
-                                   <div className="flex flex-col items-center ml-[3px]">
-                                        <div className="w-2 h-2 bg-[#5CFF72]"></div>
-                                   </div>
-                                   <div className="text-[#5CFF72] text-xs font-bold font-mono">CHAIN COMPLETE</div>
-                               </div>
-                           )}
                        </div>
                    )}
                </div>
@@ -1659,13 +1249,12 @@ const App: React.FC = () => {
         )}
 
         {/* Status Bar Footer */}
-        <div className="fixed bottom-0 left-0 w-full bg-black/90 backdrop-blur border-t border-[#2B2B2B] py-2 px-4 flex justify-between items-center text-[10px] font-mono text-[#5CFF72] z-40">
+        <div className="fixed bottom-0 left-0 w-full bg-black/90 backdrop-blur border-t border-[#2B2B2B] py-2 px-4 flex justify-between items-center text-[10px] font-mono text-[#5CFF72] z-[150]">
            <div className="flex gap-4">
              <span>STATUS: {isProcessing ? 'PROCESSING' : 'IDLE'}</span>
-             <span className="text-[#E0E083]">{statusMessage}</span>
+             <span className="text-[#E0E083] truncate max-w-[200px] md:max-w-none">{statusMessage}</span>
            </div>
            <div className="flex gap-4 text-[#2B2B2B]">
-             <span>MEM: {Math.round((performance as any).memory?.usedJSHeapSize / 1024 / 1024 || 0)}MB</span>
              <span>VER: 1.2.0</span>
            </div>
         </div>
