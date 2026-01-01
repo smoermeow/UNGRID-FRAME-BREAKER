@@ -1,7 +1,7 @@
 
 export interface ExtractedPanel {
   id: string;
-  index: number; // 0-8
+  index: number; // 0-24
   originalUrl: string; // The extracted base64 image (upscaled via canvas)
   aiGeneratedUrl?: string; // The result from Gemini re-imagination
   aiDescription?: string; // The result from Gemini analysis
@@ -30,7 +30,7 @@ export interface ChainStep {
 export type Resolution = '1K' | '2K' | '4K';
 export type AspectRatio = '16:9' | '1:1' | '9:16' | '21:9';
 export type ProcessingMode = 'fidelity' | 'creative';
-export type GridLayout = '3x3' | '2x2' | '1x3' | '1x4' | '2x4' | 'irregular';
+export type GridLayout = '3x3' | '2x2' | '1x3' | '1x4' | '2x4' | '5x5' | 'irregular';
 
 export interface BoundingBox {
   ymin: number;

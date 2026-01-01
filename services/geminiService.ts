@@ -1,16 +1,32 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Resolution, AspectRatio, ProcessingMode, BoundingBox, FixType } from '../types';
 
 /**
- * Checks if a valid API key is available in either localStorage or the environment.
+ * Checks if a valid API key has been explicitly selected or provided.
+ * Ignores pre-injected environment keys to ensure the "Login" prompt logic works.
  */
-export const hasValidKey = () => {
-  return !!localStorage.getItem('ungrid_api_key') || !!process.env.API_KEY;
+export const hasValidKey = async () => {
+  // If user manually pasted a key, it's valid.
+  if (!!localStorage.getItem('ungrid_api_key')) return true;
+  
+  const win = window as any;
+  if (win.aistudio && win.aistudio.hasSelectedApiKey) {
+    try {
+      // Strictly rely on the platform's key selection state
+      return await win.aistudio.hasSelectedApiKey();
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  // If no manual key and no platform selection, return false to trigger login popup
+  return false;
 };
 
 /**
  * Initializes a new GoogleGenAI client using the available key.
- * Prioritizes the user's manual key from localStorage.
+ * Prioritizes the user's manual key from localStorage, then falls back to platform env.
  */
 const getClient = () => {
   const apiKey = localStorage.getItem('ungrid_api_key') || process.env.API_KEY;

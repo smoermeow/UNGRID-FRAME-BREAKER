@@ -1,10 +1,11 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import ImageDropzone from './components/ImageDropzone';
 import { loadImage, splitImage, getTargetDimensions, imageToDataURL } from './utils/imageUtils';
 import { downloadPanelsAsZip, downloadFaceTargetsAsZip, downloadChainHistoryAsZip } from './utils/downloadUtils';
 import { reimagineImage, detectPanels, fixDetail, runChainCleaningStep, hasValidKey } from './services/geminiService';
 import { ExtractedPanel, Resolution, AspectRatio, ProcessingMode, GridLayout, BoundingBox, FaceTarget, ChainStep, FixType } from './types';
-import { Download, RefreshCw, Trash2, Cpu, Image as ImageIcon, Loader2, Sparkles, Archive, X, CheckSquare, Square, ChevronRight, Zap, ExternalLink, Ban, Play, SlidersHorizontal, RefreshCcw, HelpCircle, Grid2X2, Grid3X3, Scan, FlaskConical, AlertTriangle, Key, LogIn, Columns, Ratio, Eraser, Layers, Plus, ArrowRight, Lock, Unlock, Wand2, ArrowDown, ChevronDown, ZoomIn, Eye, EyeOff, User, PenTool, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Download, RefreshCw, Trash2, Cpu, Image as ImageIcon, Loader2, Sparkles, Archive, X, CheckSquare, Square, ChevronRight, Zap, ExternalLink, Ban, Play, SlidersHorizontal, RefreshCcw, HelpCircle, Grid2X2, Grid3X3, Scan, FlaskConical, AlertTriangle, Key, LogIn, Columns, Ratio, Eraser, Layers, Plus, ArrowRight, Lock, Unlock, Wand2, ArrowDown, ChevronDown, ZoomIn, Eye, EyeOff, User, PenTool, ShieldCheck, AlertCircle, LayoutGrid } from 'lucide-react';
 
 // Inline Logo Component for Header
 const UngridLogoHeader = ({ className }: { className?: string }) => (
@@ -16,21 +17,23 @@ const UngridLogoHeader = ({ className }: { className?: string }) => (
     </defs>
     <g className="fill-[#FFD43B]">
       <rect x="2" y="2" width="18" height="18" />
-      <rect x="2" y="22" width="18" height="18" />
-      <rect x="2" y="42" width="18" height="18" />
       <rect x="22" y="2" width="18" height="18" />
-      <rect x="22" y="42" width="18" height="18" />
       <rect x="42" y="2" width="18" height="18" />
+      <rect x="2" y="22" width="18" height="18" />
       <rect x="42" y="22" width="18" height="18" />
+      <rect x="2" y="42" width="18" height="18" />
+      <rect x="22" y="42" width="18" height="18" />
+      <rect x="42" y="42" width="18" height="18" />
     </g>
     <g fill="url(#pixel-grid-header)">
       <rect x="2" y="2" width="18" height="18" />
-      <rect x="2" y="22" width="18" height="18" />
-      <rect x="2" y="42" width="18" height="18" />
       <rect x="22" y="2" width="18" height="18" />
-      <rect x="22" y="42" width="18" height="18" />
       <rect x="42" y="2" width="18" height="18" />
+      <rect x="2" y="22" width="18" height="18" />
       <rect x="42" y="22" width="18" height="18" />
+      <rect x="2" y="42" width="18" height="18" />
+      <rect x="22" y="42" width="18" height="18" />
+      <rect x="42" y="42" width="18" height="18" />
     </g>
   </svg>
 );
@@ -240,7 +243,7 @@ const AuthOverlay = ({
            </div>
         </div>
         
-        <h2 className="text-3xl font-black text-[#FFD43B] mb-4 uppercase tracking-tighter leading-none">
+        <h2 className="text-3xl font-black text-[#FFD43B] mb-4 uppercase tracking-tighter mb-2 leading-none">
            AUTHENTICATION
         </h2>
         
@@ -311,8 +314,8 @@ const App: React.FC = () => {
   const [isRefLocked, setIsRefLocked] = useState(false);
 
   // --- Chain Cleaning State ---
-  const [chainSource, setChainSource] = useState<string | null>(null);
-  const [chainRef, setChainRef] = useState<string | null>(null);
+  const [chainSourceState, setChainSourceState] = useState<string | null>(null);
+  const [chainRefStateVal, setChainRefStateVal] = useState<string | null>(null);
   const [chainSteps, setChainSteps] = useState<ChainStep[]>([]);
   const [chainInputText, setChainInputText] = useState('');
 
@@ -326,8 +329,12 @@ const App: React.FC = () => {
   const hasAiResults = panels.some(p => p.status === 'success');
   const isAllComplete = panels.length > 0 && panels.every(p => p.status === 'success');
 
-  const checkAuth = () => {
-    if (hasValidKey()) return true;
+  /**
+   * Universal Auth Guard. Must be awaited before any AI tool runs.
+   */
+  const checkAuth = async () => {
+    const valid = await hasValidKey();
+    if (valid) return true;
     setIsAuthOpen(true);
     return false;
   };
@@ -393,7 +400,10 @@ const App: React.FC = () => {
 
     try {
       const newImageUrl = await reimagineImage(panel.originalUrl, resolution, aspectRatio, mode);
-      if (signal.aborted) return;
+      if (signal.aborted) {
+        setPanels(prev => prev.map(p => p.id === id && p.status === 'generating' ? { ...p, status: 'idle' } : p));
+        return;
+      }
 
       setPanels(prev => prev.map(p => p.id === id ? { 
         ...p, 
@@ -401,26 +411,30 @@ const App: React.FC = () => {
         aiGeneratedUrl: newImageUrl 
       } : p));
     } catch (error: any) {
-      if (signal.aborted) return;
+      if (signal.aborted) {
+        setPanels(prev => prev.map(p => p.id === id && p.status === 'generating' ? { ...p, status: 'idle' } : p));
+        return;
+      }
       console.error(error);
       setPanels(prev => prev.map(p => p.id === id ? { ...p, status: 'error' } : p));
     }
   };
 
   const handleStartProcessing = async () => {
-    if (!checkAuth()) return;
     if (!originalImage) return;
 
     try {
-      setIsProcessing(true);
-      setStatusMessage('INITIALIZING NEURAL LINK...');
       const img = new Image();
       img.src = originalImage;
       await img.decode();
       const dims = getTargetDimensions(resolution, aspectRatio);
       
       let currentBoundingBoxes: BoundingBox[] | undefined = undefined;
+
+      // AI Detect Pass (Powered by Gemini Flash) - Gated
       if (gridLayout === 'irregular') {
+         if (!(await checkAuth())) return; // Guard for AI detection
+         setIsProcessing(true);
          setStatusMessage('DETECTING WEIRD SHAPES...');
          try {
            const base64Str = imageToDataURL(img, 1024);
@@ -432,18 +446,32 @@ const App: React.FC = () => {
          }
       }
 
+      // Local Canvas Split (Free Part)
+      setIsProcessing(true);
       setStatusMessage('SPLITTING FRAMES...');
       let rows = 3; let cols = 3;
       if (gridLayout === '2x2') { rows = 2; cols = 2; }
       else if (gridLayout === '1x3') { rows = 1; cols = 3; }
       else if (gridLayout === '1x4') { rows = 4; cols = 1; }
       else if (gridLayout === '2x4') { rows = 4; cols = 2; }
+      else if (gridLayout === '5x5') { rows = 5; cols = 5; }
 
       const panelImages = splitImage(img, { rows, cols, targetWidth: dims.width, targetHeight: dims.height, boundingBoxes: currentBoundingBoxes });
       const newPanels: ExtractedPanel[] = panelImages.map((src, index) => ({ id: crypto.randomUUID(), index, originalUrl: src, status: 'idle' }));
+      
+      // Update UI with local splits immediately - Works WITHOUT AI KEY
       setPanels(newPanels);
-      setStatusMessage('THINKING HARD...');
 
+      // AI Enhancement Pass - Gated
+      if (!(await checkAuth())) {
+        setIsProcessing(false);
+        setStatusMessage('');
+        return; // Stop here - the user has their manual split but needs to login for AI enhancement
+      }
+
+      // Proceed with AI loop if authenticated
+      setIsProcessing(true);
+      setStatusMessage('THINKING HARD...');
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
 
@@ -451,6 +479,7 @@ const App: React.FC = () => {
         if (signal.aborted) break;
         await processPanel(panel.id, newPanels, signal);
       }
+      
       if (!signal.aborted) {
         setIsProcessing(false);
         setStatusMessage('');
@@ -462,7 +491,7 @@ const App: React.FC = () => {
   };
 
   const handleResumeProcessing = async () => {
-    if (!checkAuth()) return;
+    if (!(await checkAuth())) return;
     if (isProcessing) return;
     const remaining = panels.filter(p => p.status !== 'success');
     if (remaining.length === 0) return;
@@ -478,7 +507,7 @@ const App: React.FC = () => {
   };
 
   const handleRetryPanel = async (id: string) => {
-     if (!checkAuth()) return;
+     if (!(await checkAuth())) return;
      if (isProcessing) return;
      setIsProcessing(true);
      abortControllerRef.current = new AbortController();
@@ -526,7 +555,9 @@ const App: React.FC = () => {
   };
 
   const handleExecuteFaceFix = async (forceAll: boolean = false) => {
-    if (!checkAuth()) return;
+    // RIGID GATING: AI TOOL
+    if (!(await checkAuth())) return;
+    
     if (ffTargets.length === 0) return;
     const toProcess = forceAll ? ffTargets : ffTargets.filter(t => t.status !== 'success');
     if (toProcess.length === 0) return;
@@ -559,13 +590,15 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error(error);
     } finally {
-      setIsProcessing(false);
-      setStatusMessage('');
+      if (!signal.aborted) {
+        setIsProcessing(false);
+        setStatusMessage('');
+      }
     }
   };
 
   const handleRerunSingleFaceFix = async (id: string) => {
-     if (!checkAuth()) return;
+     if (!(await checkAuth())) return;
      if (isProcessing) return;
      const target = ffTargets.find(t => t.id === id);
      if (!target) return;
@@ -583,11 +616,15 @@ const App: React.FC = () => {
           const resultBase64 = await fixDetail(targetBase64, refBase64, resolution, target.fixType, target.position);
           if (!signal.aborted) {
               setFfTargets(prev => prev.map(t => t.id === id ? { ...t, status: 'success', result: resultBase64 } : t));
+          } else {
+              setFfTargets(prev => prev.map(t => t.id === id && t.status === 'processing' ? { ...t, status: 'idle' } : t));
           }
      } catch (e) {
           if (!signal.aborted) {
                console.error(e);
                setFfTargets(prev => prev.map(t => t.id === id ? { ...t, status: 'error' } : t));
+          } else {
+               setFfTargets(prev => prev.map(t => t.id === id && t.status === 'processing' ? { ...t, status: 'idle' } : t));
           }
      } finally {
           setIsProcessing(false);
@@ -600,14 +637,14 @@ const App: React.FC = () => {
   const handleChainSourceSelected = async (file: File) => {
     try {
         const img = await loadImage(file);
-        setChainSource(img.src);
+        setChainSourceState(img.src);
     } catch(e) { alert("Error loading source"); }
   };
 
   const handleChainRefSelected = async (file: File) => {
     try {
         const img = await loadImage(file);
-        setChainRef(img.src);
+        setChainRefStateVal(img.src);
     } catch(e) { alert("Error loading reference"); }
   };
 
@@ -626,16 +663,18 @@ const App: React.FC = () => {
   };
 
   const handleExecuteChain = async () => {
-      if (!checkAuth()) return;
-      if (!chainSource || chainSteps.length === 0) return;
+      // RIGID GATING: AI TOOL
+      if (!(await checkAuth())) return;
+      
+      if (!chainSourceState || chainSteps.length === 0) return;
       setIsProcessing(true);
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
-      let currentImage = chainSource;
+      let currentImage = chainSourceState;
       let refImageBase64: string | null = null;
 
-      if (chainRef) {
-          const refImg = new Image(); refImg.src = chainRef; await refImg.decode();
+      if (chainRefStateVal) {
+          const refImg = new Image(); refImg.src = chainRefStateVal; await refImg.decode();
           refImageBase64 = imageToDataURL(refImg);
       }
 
@@ -664,8 +703,10 @@ const App: React.FC = () => {
       } catch (error: any) {
           console.error(error);
       } finally {
-          setIsProcessing(false);
-          setStatusMessage('');
+          if (!signal.aborted) {
+            setIsProcessing(false);
+            setStatusMessage('');
+          }
       }
   };
 
@@ -675,6 +716,11 @@ const App: React.FC = () => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     setIsProcessing(false);
     setStatusMessage('');
+    
+    // STRICT RECOVERY: Reset generating items to idle to prevent stuck bars
+    setPanels(prev => prev.map(p => p.status === 'generating' ? { ...p, status: 'idle' } : p));
+    setFfTargets(prev => prev.map(t => t.status === 'processing' ? { ...t, status: 'idle' } : t));
+    setChainSteps(prev => prev.map(s => s.status === 'processing' ? { ...s, status: 'pending' } : s));
   };
 
   const reset = () => {
@@ -690,8 +736,8 @@ const App: React.FC = () => {
         setStagingFixType('face');
         setIsRefLocked(false);
     } else if (appMode === 'chain_clean') {
-        setChainSource(null);
-        setChainRef(null);
+        setChainSourceState(null);
+        setChainRefStateVal(null);
         setChainSteps([]);
     }
   };
@@ -748,6 +794,9 @@ const App: React.FC = () => {
                         <button onClick={() => setGridLayout('2x4')} className={`p-2 border text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center gap-1 ${gridLayout === '2x4' ? 'bg-[#5CFF72] text-black border-[#5CFF72]' : 'border-[#2B2B2B] text-[#E0E083] hover:border-[#E0E083]'}`}>
                            <Layers size={14} /> 2x4 (GRID)
                         </button>
+                        <button onClick={() => setGridLayout('5x5')} className={`p-2 border text-[10px] font-bold uppercase transition-all flex flex-col items-center justify-center gap-1 ${gridLayout === '5x5' ? 'bg-[#5CFF72] text-black border-[#5CFF72]' : 'border-[#2B2B2B] text-[#E0E083] hover:border-[#E0E083]'}`}>
+                           <LayoutGrid size={14} /> 5x5
+                        </button>
                         <button onClick={() => setGridLayout('irregular')} className={`p-2 border text-[10px] font-bold transition-all ${gridLayout === 'irregular' ? 'bg-[#5CFF72] text-black border-[#5CFF72]' : 'border-[#2B2B2B] text-[#E0E083] hover:border-[#E0E083]'}`}>
                            <Scan size={14} className="mx-auto mb-1" /> AUTO
                         </button>
@@ -799,7 +848,7 @@ const App: React.FC = () => {
           <div className="mb-4">
             <UngridLogoHeader className="w-16 h-16 drop-shadow-[0_0_8px_rgba(255,212,59,0.3)]" />
           </div>
-          <h1 className="text-5xl md:text-6xl font-black mb-1 leading-none tracking-tighter">
+          <h1 className="text-5xl md:text-6xl font-black mb-1 leading-none tracking-tighter text-center">
             <span className="text-[#5CFF72] glow-text-green">UNGRID</span>
             <span className="text-xs align-top ml-2 text-[#2B2B2B]">v1.0</span>
           </h1>
@@ -844,11 +893,11 @@ const App: React.FC = () => {
               <>
                  {!isAllComplete && (
                    <button onClick={handleResumeProcessing} className="px-4 py-2 border border-[#5CFF72] text-[#5CFF72] hover:bg-[#5CFF72] hover:text-black uppercase text-sm font-bold flex items-center gap-2 transition-colors">
-                    <Play size={16} /> RESUME
+                    <Play size={16} /> ENHANCE WITH AI
                   </button>
                  )}
                  <button onClick={handleStartProcessing} className="px-4 py-2 border border-[#FFD43B] text-[#FFD43B] hover:bg-[#FFD43B] hover:text-black uppercase text-sm font-bold flex items-center gap-2 transition-colors">
-                    <RefreshCcw size={16} /> RERUN ALL
+                    <RefreshCcw size={16} /> RERUN AI
                   </button>
                  <button onClick={() => setIsParamsOpen(true)} className="px-4 py-2 border border-[#E0E083] text-[#E0E083] hover:bg-[#E0E083] hover:text-black uppercase text-sm font-bold flex items-center gap-2 transition-colors">
                   <SlidersHorizontal size={16} /> CONFIG
@@ -860,11 +909,11 @@ const App: React.FC = () => {
             )}
             <div className="w-px h-6 bg-[#2B2B2B] mx-2 hidden md:block"></div>
             <button onClick={() => downloadPanelsAsZip(panels, 'original', resolution)} className="px-4 py-2 border border-[#E0E083] text-[#E0E083] hover:bg-[#E0E083] hover:text-black uppercase text-sm font-bold flex items-center gap-2 transition-colors">
-              <Archive size={16} /> RAW
+              <Archive size={16} /> DOWNLOAD RAW CROPS
             </button>
              {hasAiResults && (
               <button onClick={() => downloadPanelsAsZip(panels, 'ai', resolution)} className="px-4 py-2 bg-[#5CFF72] text-black border border-[#5CFF72] hover:bg-white uppercase text-sm font-bold flex items-center gap-2 transition-colors">
-                <Archive size={16} /> RESULTS
+                <Archive size={16} /> DOWNLOAD AI RESULTS
               </button>
             )}
           </div>
@@ -911,12 +960,12 @@ const App: React.FC = () => {
                         <Archive size={16} /> DOWNLOAD STEPS
                      </button>
                   )}
-                  {chainSource && chainSteps.length > 0 && (
+                  {chainSourceState && chainSteps.length > 0 && (
                      <button onClick={handleExecuteChain} className="px-4 py-2 bg-[#5CFF72] text-black border border-[#5CFF72] hover:bg-white uppercase text-sm font-bold flex items-center gap-2 transition-colors">
                         <Play size={16} /> RUN CHAIN
                      </button>
                   )}
-                  {chainSource && (
+                  {chainSourceState && (
                     <button onClick={reset} className="px-4 py-2 border border-[#2B2B2B] text-[#2B2B2B] hover:bg-[#2B2B2B] hover:text-[#E0E083] uppercase text-sm font-bold flex items-center gap-2 transition-colors">
                         <Trash2 size={16} /> START OVER
                     </button>
@@ -957,7 +1006,7 @@ const App: React.FC = () => {
                     <h2 className="text-xl font-bold text-[#5CFF72] mb-6 border-b border-[#5CFF72] inline-block pb-1 uppercase">
                       Operation Parameters
                     </h2>
-                    <div className="space-y-8 flex-grow">
+                    <div className="space-y-8 flex-grow overflow-y-auto max-h-[70vh] pr-4">
                       <div>
                         <label className="text-xs text-[#FFD43B] uppercase font-bold mb-3 block border-l-2 border-[#FFD43B] pl-2">1. Grid Layout</label>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -966,6 +1015,9 @@ const App: React.FC = () => {
                           </button>
                           <button onClick={() => setGridLayout('2x2')} className={`p-4 border text-left transition-all ${gridLayout === '2x2' ? 'border-[#5CFF72] bg-[#5CFF72]/10' : 'border-[#2B2B2B] hover:border-[#E0E083]'}`}>
                              <div className="flex items-center gap-2 mb-2 text-[#FFD43B] font-bold uppercase text-sm"><Grid2X2 size={16} /> 2x2 Grid</div>
+                          </button>
+                          <button onClick={() => setGridLayout('5x5')} className={`p-4 border text-left transition-all ${gridLayout === '5x5' ? 'border-[#5CFF72] bg-[#5CFF72]/10' : 'border-[#2B2B2B] hover:border-[#E0E083]'}`}>
+                             <div className="flex items-center gap-2 mb-2 text-[#5CFF72] font-bold uppercase text-sm"><LayoutGrid size={16} /> 5x5 [MEGA]</div>
                           </button>
                           <button onClick={() => setGridLayout('1x3')} className={`p-4 border text-left transition-all ${gridLayout === '1x3' ? 'border-[#5CFF72] bg-[#5CFF72]/10' : 'border-[#2B2B2B] hover:border-[#E0E083]'}`}>
                              <div className="flex items-center gap-2 mb-2 text-[#5CFF72] font-bold uppercase text-sm"><Columns size={16} /> 1x3 Strip</div>
@@ -1025,13 +1077,14 @@ const App: React.FC = () => {
             )}
 
             {panels.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-12 pb-24">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-12 pb-24 animate-in slide-in-from-bottom-4">
                 {panels.map((panel) => (
                   <div key={panel.id} className="relative group bg-[#050505] border border-[#2B2B2B] hover:border-[#5CFF72] transition-colors p-2">
                     <div className="absolute top-4 left-4 z-10 pointer-events-none">
                        {panel.status === 'generating' && (<div className="bg-black/80 text-[#5CFF72] px-2 py-1 text-xs font-bold border border-[#5CFF72] flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> GENERATING...</div>)}
                        {panel.status === 'error' && (<div className="bg-red-900/90 text-white px-2 py-1 text-xs font-bold border border-red-500 flex items-center gap-2"><AlertTriangle size={12} /> ERROR</div>)}
                        {panel.status === 'success' && (<div className="bg-[#5CFF72]/90 text-black px-2 py-1 text-xs font-bold flex items-center gap-2"><CheckSquare size={12} /> DONE</div>)}
+                       {panel.status === 'idle' && !isProcessing && (<div className="bg-[#FFD43B]/20 text-[#FFD43B] px-2 py-1 text-xs font-bold border border-[#FFD43B]">READY_FOR_AI</div>)}
                     </div>
                     <div 
                       onClick={() => setLightboxData({ url: panel.aiGeneratedUrl || panel.originalUrl, originalUrl: panel.originalUrl })}
@@ -1045,16 +1098,14 @@ const App: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center justify-between px-2">
-                      <span className="text-[#E0E083] font-mono text-xs">PANEL_0{panel.index + 1}</span>
+                      <span className="text-[#E0E083] font-mono text-xs">PANEL_{String(panel.index + 1).padStart(2, '0')}</span>
                       <div className="flex gap-2">
-                         <button onClick={() => handleRetryPanel(panel.id)} disabled={isProcessing} className="p-1.5 text-[#E0E083] hover:text-[#FFD43B] hover:bg-[#2B2B2B]" title="Rerun this panel">
+                         <button onClick={() => handleRetryPanel(panel.id)} disabled={isProcessing} className="p-1.5 text-[#E0E083] hover:text-[#FFD43B] hover:bg-[#2B2B2B]" title="Rerun AI on this panel">
                            <RefreshCw size={14} className={isProcessing ? 'opacity-50' : ''} />
                          </button>
-                         {panel.aiGeneratedUrl && (
-                           <button onClick={() => downloadImage(panel.aiGeneratedUrl!, `ungrid-panel-${panel.index+1}.png`)} className="p-1.5 text-[#5CFF72] hover:text-white hover:bg-[#2B2B2B]" title="Download">
-                              <Download size={14} />
-                           </button>
-                         )}
+                         <button onClick={() => downloadImage(panel.aiGeneratedUrl || panel.originalUrl, `ungrid-panel-${panel.index+1}.png`)} className="p-1.5 text-[#5CFF72] hover:text-white hover:bg-[#2B2B2B]" title="Download">
+                            <Download size={14} />
+                         </button>
                       </div>
                     </div>
                   </div>
@@ -1208,10 +1259,10 @@ const App: React.FC = () => {
                <div className="lg:col-span-3 space-y-4">
                   <div className="bg-[#050505] border border-[#2B2B2B] p-4">
                       <h3 className="text-[#5CFF72] font-bold text-xs uppercase mb-3 flex items-center gap-2"><ImageIcon size={14}/> 1. Source</h3>
-                      {chainSource ? (
+                      {chainSourceState ? (
                           <div className="relative border border-[#2B2B2B] group">
-                              <img src={chainSource} className="w-full h-auto" />
-                              <button onClick={() => setChainSource(null)} className="absolute top-1 right-1 bg-black text-red-500 p-1 border border-red-500"><X size={12}/></button>
+                              <img src={chainSourceState} className="w-full h-auto" />
+                              <button onClick={() => setChainSourceState(null)} className="absolute top-1 right-1 bg-black text-red-500 p-1 border border-red-500"><X size={12}/></button>
                           </div>
                       ) : (
                           <ImageDropzone 
@@ -1224,10 +1275,10 @@ const App: React.FC = () => {
                   </div>
                   <div className="bg-[#050505] border border-[#2B2B2B] p-4">
                       <h3 className="text-[#FFD43B] font-bold text-xs uppercase mb-3 flex items-center gap-2"><Layers size={14}/> 2. Reference</h3>
-                      {chainRef ? (
+                      {chainRefStateVal ? (
                           <div className="relative border border-[#2B2B2B] group">
-                              <img src={chainRef} className="w-full h-auto" />
-                              <button onClick={() => setChainRef(null)} className="absolute top-1 right-1 bg-black text-red-500 p-1 border border-red-500"><X size={12}/></button>
+                              <img src={chainRefStateVal} className="w-full h-auto" />
+                              <button onClick={() => setChainRefStateVal(null)} className="absolute top-1 right-1 bg-black text-red-500 p-1 border border-red-500"><X size={12}/></button>
                           </div>
                       ) : (
                           <ImageDropzone 
@@ -1264,7 +1315,7 @@ const App: React.FC = () => {
                </div>
                <div className="lg:col-span-5 space-y-6">
                    <h3 className="text-[#FFD43B] font-bold text-xs uppercase flex items-center gap-2 border-b border-[#2B2B2B] pb-2">4. Output Visualization</h3>
-                   {chainSource && chainSteps.length > 0 && (
+                   {chainSourceState && chainSteps.length > 0 && (
                        <div className="space-y-4">
                            {chainSteps.map((step, idx) => (
                                <div key={step.id} className="border p-1 bg-black transition-all">
