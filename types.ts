@@ -28,9 +28,9 @@ export interface ChainStep {
 }
 
 export type Resolution = '1K' | '2K' | '4K';
-export type AspectRatio = '16:9' | '1:1' | '9:16';
+export type AspectRatio = '16:9' | '1:1' | '9:16' | '21:9';
 export type ProcessingMode = 'fidelity' | 'creative';
-export type GridLayout = '3x3' | '2x2' | '1x3' | 'irregular';
+export type GridLayout = '3x3' | '2x2' | '1x3' | '1x4' | '2x4' | 'irregular';
 
 export interface BoundingBox {
   ymin: number;
